@@ -1,0 +1,24 @@
+meta {
+  name: Editar Nota
+  type: http
+  seq: 4
+}
+
+put {
+  url: http://localhost:5000/api/notes/ID_DE_LA_NOTA
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "title": "Nota editada",
+    "content": "Ahora sí puedo actualizar 😎"
+  }
+  
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
