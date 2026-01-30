@@ -1,13 +1,17 @@
 meta {
   name: Edicion Titulo Nota
   type: http
-  seq: 5
+  seq: 8
 }
 
 patch {
-  url: http://localhost:5000/api/notes/ID_DE_LA_NOTA
+  url: http://localhost:5000/api/notes/:id
   body: json
   auth: inherit
+}
+
+params:path {
+  id: 
 }
 
 body:json {

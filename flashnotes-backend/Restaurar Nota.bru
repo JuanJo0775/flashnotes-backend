@@ -1,11 +1,11 @@
 meta {
-  name: Eliminar Nota
+  name: Restaurar Nota
   type: http
-  seq: 7
+  seq: 12
 }
 
-delete {
-  url: http://localhost:5000/api/notes/:id/permanent
+patch {
+  url: http://localhost:5000/api/notes/:id/restore
   body: none
   auth: inherit
 }

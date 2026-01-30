@@ -1,0 +1,24 @@
+meta {
+  name: Deshaser Cambio
+  type: http
+  seq: 11
+}
+
+patch {
+  url: http://localhost:5000/api/notes/:id/undo
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+vars:pre-request {
+  id: 697d2e6d6efcaecacaf061ca
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

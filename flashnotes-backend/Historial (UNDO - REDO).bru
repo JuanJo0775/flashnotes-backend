@@ -1,11 +1,11 @@
 meta {
-  name: Eliminar Nota
+  name: Historial (UNDO / REDO)
   type: http
-  seq: 7
+  seq: 6
 }
 
-delete {
-  url: http://localhost:5000/api/notes/:id/permanent
+get {
+  url: http://localhost:5000/api/notes/:id/history
   body: none
   auth: inherit
 }
