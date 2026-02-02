@@ -50,6 +50,14 @@ const noteSchema = new mongoose.Schema(
             minlength: [1, 'El contenido no puede estar vacío'],
         },
 
+        /* ========== TIMESTAMP DE EDICIÓN (PARA CONCURRENCIA) ========== */
+
+        editedAt: {
+            type: Date,
+            default: Date.now,
+            index: true,
+        },
+
         /* ========== SOFT DELETE ========== */
 
         isDeleted: {

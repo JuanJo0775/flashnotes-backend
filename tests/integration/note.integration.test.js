@@ -178,7 +178,7 @@ describe('Notes API - Integration Tests', () => {
             await new Promise(resolve => setTimeout(resolve, 10));
 
             const freshNote = await Note.findById(note._id);
-            const oldTimestamp = new Date(freshNote.updatedAt.getTime() - 1000);
+            const oldTimestamp = new Date(freshNote.editedAt.getTime() - 1000);
 
             const response = await request(app)
                 .patch(`/api/notes/${note._id}`)
