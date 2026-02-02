@@ -3,7 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "node ./bin/www"
+    "start": "node ./bin/www",
+
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration"
   },
   "dependencies": {
     "cookie-parser": "~1.4.4",
@@ -13,5 +19,10 @@
     "express": "~4.16.1",
     "mongoose": "^9.1.5",
     "morgan": "~1.9.1"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "mongodb-memory-server": "^11.0.1",
+    "supertest": "^7.2.2"
   }
 }
