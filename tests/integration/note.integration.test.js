@@ -170,11 +170,15 @@ describe('Notes API - Integration Tests', () => {
 
         test('debe retornar 409 en conflicto de concurrencia', async () => {
             const note = await Note.create({
-                title: 'Original',
-                content: 'Content'
+                title: 'Original Title',
+                content: 'Original Content'
             });
 
-            const oldTimestamp = new Date(note.editedAt.getTime() - 1000);
+            // Esperar un momento para asegurar que editedAt está definido
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const freshNote = await Note.findById(note._id);
+            const oldTimestamp = new Date(freshNote.updatedAt.getTime() - 1000);
 
             const response = await request(app)
                 .patch(`/api/notes/${note._id}`)
@@ -209,21 +213,21 @@ describe('Notes API - Integration Tests', () => {
     describe('POST /api/notes/:id/undo', () => {
         test('debe deshacer cambios correctamente', async () => {
             const note = await Note.create({
-                title: 'V1',
-                content: 'C1'
+                title: 'Version 1',
+                content: 'Content 1'
             });
 
             // Hacer un cambio
             await request(app)
                 .patch(`/api/notes/${note._id}`)
-                .send({ title: 'V2' });
+                .send({ title: 'Version 2' });
 
             // Undo
             const response = await request(app)
                 .post(`/api/notes/${note._id}/undo`);
 
             expect(response.status).toBe(200);
-            expect(response.body.title).toBe('V1');
+            expect(response.body.title).toBe('Version 1');
             expect(response.body.redoStack).toHaveLength(1);
         });
 
@@ -257,14 +261,14 @@ describe('Notes API - Integration Tests', () => {
     describe('POST /api/notes/:id/redo', () => {
         test('debe rehacer cambios correctamente', async () => {
             const note = await Note.create({
-                title: 'V1',
-                content: 'C1'
+                title: 'Version 1',
+                content: 'Content 1'
             });
 
             // Cambio
             await request(app)
                 .patch(`/api/notes/${note._id}`)
-                .send({ title: 'V2' });
+                .send({ title: 'Version 2' });
 
             // Undo
             await request(app).post(`/api/notes/${note._id}/undo`);
@@ -274,7 +278,7 @@ describe('Notes API - Integration Tests', () => {
                 .post(`/api/notes/${note._id}/redo`);
 
             expect(response.status).toBe(200);
-            expect(response.body.title).toBe('V2');
+            expect(response.body.title).toBe('Version 2');
             expect(response.body.redoStack).toHaveLength(0);
         });
 
@@ -398,25 +402,29 @@ describe('Notes API - Integration Tests', () => {
             // Crear
             let response = await request(app)
                 .post('/api/notes')
-                .send({ title: 'V1', content: 'C1' });
+                .send({ title: 'Version 1', content: 'Content 1' });
 
             const noteId = response.body._id;
+            expect(response.status).toBe(201);
 
             // Editar
             response = await request(app)
                 .patch(`/api/notes/${noteId}`)
-                .send({ title: 'V2' });
-            expect(response.body.title).toBe('V2');
+                .send({ title: 'Version 2' });
+            expect(response.status).toBe(200);
+            expect(response.body.title).toBe('Version 2');
 
             // Undo
             response = await request(app)
                 .post(`/api/notes/${noteId}/undo`);
-            expect(response.body.title).toBe('V1');
+            expect(response.status).toBe(200);
+            expect(response.body.title).toBe('Version 1');
 
             // Redo
             response = await request(app)
                 .post(`/api/notes/${noteId}/redo`);
-            expect(response.body.title).toBe('V2');
+            expect(response.status).toBe(200);
+            expect(response.body.title).toBe('Version 2');
         });
 
         test('flujo: crear → editar → papelera → restaurar → eliminar permanente', async () => {
@@ -451,14 +459,14 @@ describe('Notes API - Integration Tests', () => {
         test('undo después de edición debe invalidar redo', async () => {
             let response = await request(app)
                 .post('/api/notes')
-                .send({ title: 'V1', content: 'C1' });
+                .send({ title: 'Version 1', content: 'Content 1' });
 
             const noteId = response.body._id;
 
             // Edit 1
             await request(app)
                 .patch(`/api/notes/${noteId}`)
-                .send({ title: 'V2' });
+                .send({ title: 'Version 2' });
 
             // Undo
             await request(app).post(`/api/notes/${noteId}/undo`);
@@ -466,7 +474,7 @@ describe('Notes API - Integration Tests', () => {
             // Edit 2 (esto invalida redo)
             await request(app)
                 .patch(`/api/notes/${noteId}`)
-                .send({ title: 'V3' });
+                .send({ title: 'Version 3' });
 
             // Intentar redo debe fallar
             response = await request(app)
