@@ -14,8 +14,11 @@ class NoteController {
 
             if (!validation.valid) {
                 return res.status(400).json({
-                    error: 'Validation failed',
-                    details: validation.errors
+                    success: false,
+                    error: 'VALIDATION_FAILED',
+                    message: 'Validación de datos fallida',
+                    details: validation.errors,
+                    statusCode: 400
                 });
             }
 
@@ -26,7 +29,12 @@ class NoteController {
 
             res.status(201).json(note);
         } catch (error) {
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
@@ -69,8 +77,11 @@ class NoteController {
 
             if (!validation.valid) {
                 return res.status(400).json({
-                    error: 'Validation failed',
-                    details: validation.errors
+                    success: false,
+                    error: 'VALIDATION_FAILED',
+                    message: 'Validación de datos fallida',
+                    details: validation.errors,
+                    statusCode: 400
                 });
             }
 
@@ -83,15 +94,27 @@ class NoteController {
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({ error: 'Note not found' });
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_FOUND',
+                    message: 'La nota solicitada no existe o fue eliminada',
+                    statusCode: 404
+                });
             }
             if (error.code === 'CONFLICT') {
                 return res.status(409).json({
-                    error: 'Conflict detected',
-                    message: error.message
+                    success: false,
+                    error: 'CONFLICT',
+                    message: 'La nota fue modificada por otra sesión. Recarga la página.',
+                    statusCode: 409
                 });
             }
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
@@ -108,12 +131,27 @@ class NoteController {
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({ error: 'Note not found' });
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_FOUND',
+                    message: 'La nota solicitada no existe o fue eliminada',
+                    statusCode: 404
+                });
             }
             if (error.code === 'NO_HISTORY') {
-                return res.status(400).json({ error: error.message });
+                return res.status(400).json({
+                    success: false,
+                    error: 'NO_HISTORY',
+                    message: error.message,
+                    statusCode: 400
+                });
             }
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
@@ -130,18 +168,30 @@ class NoteController {
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({ error: 'Note not found' });
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_FOUND',
+                    message: 'La nota solicitada no existe o fue eliminada',
+                    statusCode: 404
+                });
             }
             if (error.code === 'NO_HISTORY') {
-                return res.status(400).json({ error: error.message });
+                return res.status(400).json({
+                    success: false,
+                    error: 'NO_REDO',
+                    message: error.message,
+                    statusCode: 400
+                });
             }
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
-    /**
-     * POST /api/notes/:id/trash
-     */
     async moveToTrash(req, res) {
         try {
             const { id } = req.params;
@@ -152,15 +202,22 @@ class NoteController {
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({ error: 'Note not found' });
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_FOUND',
+                    message: 'La nota solicitada no existe o fue eliminada',
+                    statusCode: 404
+                });
             }
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
-    /**
-     * POST /api/notes/:id/restore
-     */
     async restoreFromTrash(req, res) {
         try {
             const { id } = req.params;
@@ -171,15 +228,22 @@ class NoteController {
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
-                return res.status(404).json({ error: 'Note not in trash' });
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_IN_TRASH',
+                    message: 'La nota no está en la papelera',
+                    statusCode: 404
+                });
             }
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
-    /**
-     * DELETE /api/notes/:id
-     */
     async deletePermanently(req, res) {
         try {
             const { id } = req.params;
@@ -187,12 +251,23 @@ class NoteController {
                 id,
                 req.sessionId
             );
+            // 204 No Content - no devuelve cuerpo
             res.status(204).send();
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
-                return res.status(404).json({ error: 'Note not in trash' });
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_IN_TRASH',
+                    message: 'La nota no está en la papelera',
+                    statusCode: 404
+                });
             }
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 }
