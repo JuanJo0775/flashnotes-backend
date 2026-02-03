@@ -1,69 +1,71 @@
 // src/services/note.service.js
 
 const noteRepository = require('../repositories/note.repository');
-const NoteHistoryDomain = require('../domain/noteHistory');
+const NoteHistory = require('../domain/noteHistory');
 
 class NoteService {
     /**
      * Crear nueva nota
      * NOTA: La validación ya se hizo en el controller con DTO
      */
-    async createNote({ title, content }) {
-        return await noteRepository.create({
-            title,
-            content
-        });
+    async createNote(data, sessionId) {
+        return await noteRepository.create(data, sessionId);
     }
 
     /**
-     * Listar notas activas
+     * Listar notas activas de la sesión
      */
-    async listActiveNotes() {
-        return await noteRepository.findAllActive();
+    async listActiveNotes(sessionId) {
+        return await noteRepository.findAllActive(sessionId);
     }
 
     /**
-     * Listar papelera
+     * Listar papelera de la sesión
      */
-    async listTrash() {
-        return await noteRepository.findAllDeleted();
+    async listTrash(sessionId) {
+        return await noteRepository.findAllDeleted(sessionId);
     }
 
     /**
-     * Actualizar nota con protección optimista
+     * Actualizar nota
      */
-    async updateNote(id, { title, content, lastKnownUpdate }) {
-        const note = await noteRepository.findActiveById(id);
+    async updateNote(id, updates, sessionId) {
+        const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
             throw new Error('NOTE_NOT_FOUND');
         }
 
-        // Protección optimista contra concurrencia
-        if (lastKnownUpdate) {
-            const clientTime = new Date(lastKnownUpdate);
-            const serverTime = new Date(note.editedAt);
+        // Verificar si hay cambios reales usando la lógica del dominio
+        const hasChanges = NoteHistory.hasRealChanges(note, updates);
 
-            if (clientTime.getTime() !== serverTime.getTime()) {
+        // Si no hay cambios reales, retornar la nota sin crear versión ni guardar
+        if (!hasChanges) {
+            return note;
+        }
+
+        // Si se envió lastKnownUpdate, validar concurrencia
+        if (updates.lastKnownUpdate) {
+            const lastKnown = new Date(updates.lastKnownUpdate).toISOString();
+            const current = note.editedAt ? new Date(note.editedAt).toISOString() : null;
+            if (lastKnown !== current) {
                 const error = new Error('CONFLICT: Note was modified by another session');
                 error.code = 'CONFLICT';
                 throw error;
             }
         }
 
-        // Aplicar lógica de dominio
-        const result = NoteHistoryDomain.applyUpdate(note, { title, content });
+        // Guardar versión actual antes de editar
+        NoteHistory.saveVersion(note);
 
-        if (!result.modified) {
-            return note; // sin cambios reales
-        }
+        // Aplicar cambios
+        if (updates.title !== undefined) note.title = updates.title;
+        if (updates.content !== undefined) note.content = updates.content;
 
-        // Actualizar campos
-        note.title = result.note.title;
-        note.content = result.note.content;
-        note.versions = result.note.versions;
-        note.redoStack = result.note.redoStack;
-        note.editedAt = result.note.editedAt;
+        note.editedAt = new Date();
+
+        // Limpiar redo al editar
+        note.redoStack = [];
 
         return await noteRepository.save(note);
     }
@@ -71,64 +73,37 @@ class NoteService {
     /**
      * Deshacer cambios
      */
-    async undoNote(id) {
-        const note = await noteRepository.findActiveById(id);
+    async undoNote(id, sessionId) {
+        const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
             throw new Error('NOTE_NOT_FOUND');
         }
 
-        const result = NoteHistoryDomain.undo(note);
-
-        if (!result.success) {
-            const error = new Error('No history available to undo');
-            error.code = 'NO_HISTORY';
-            throw error;
-        }
-
-        // Aplicar cambios
-        note.title = result.note.title;
-        note.content = result.note.content;
-        note.versions = result.note.versions;
-        note.redoStack = result.note.redoStack;
-        note.editedAt = result.note.editedAt;
-
+        // Usar la versión mutable del dominio que lanza errores legibles
+        NoteHistory.undoMutable(note);
         return await noteRepository.save(note);
     }
 
     /**
      * Rehacer cambios
      */
-    async redoNote(id) {
-        const note = await noteRepository.findActiveById(id);
+    async redoNote(id, sessionId) {
+        const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
             throw new Error('NOTE_NOT_FOUND');
         }
 
-        const result = NoteHistoryDomain.redo(note);
-
-        if (!result.success) {
-            const error = new Error('No actions available to redo');
-            error.code = 'NO_REDO';
-            throw error;
-        }
-
-        // Aplicar cambios
-        note.title = result.note.title;
-        note.content = result.note.content;
-        note.versions = result.note.versions;
-        note.redoStack = result.note.redoStack;
-        note.editedAt = result.note.editedAt;
-
+        NoteHistory.redoMutable(note);
         return await noteRepository.save(note);
     }
 
     /**
      * Mover a papelera (soft delete)
      */
-    async moveToTrash(id) {
-        const note = await noteRepository.findActiveById(id);
+    async moveToTrash(id, sessionId) {
+        const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
             throw new Error('NOTE_NOT_FOUND');
@@ -143,8 +118,8 @@ class NoteService {
     /**
      * Restaurar de papelera
      */
-    async restoreFromTrash(id) {
-        const note = await noteRepository.findDeletedById(id);
+    async restoreFromTrash(id, sessionId) {
+        const note = await noteRepository.findDeletedById(id, sessionId);
 
         if (!note) {
             throw new Error('NOTE_NOT_IN_TRASH');
@@ -159,14 +134,14 @@ class NoteService {
     /**
      * Eliminar permanentemente
      */
-    async deletePermanently(id) {
-        const note = await noteRepository.findDeletedById(id);
+    async deletePermanently(id, sessionId) {
+        const note = await noteRepository.findDeletedById(id, sessionId);
 
         if (!note) {
             throw new Error('NOTE_NOT_IN_TRASH');
         }
 
-        return await noteRepository.deletePermanently(id);
+        await noteRepository.deletePermanently(id, sessionId);
     }
 }
 

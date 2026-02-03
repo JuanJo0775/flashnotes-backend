@@ -34,6 +34,16 @@ const snapshotSchema = new mongoose.Schema(
 ============================================================ */
 const noteSchema = new mongoose.Schema(
     {
+        /* ========== IDENTIFICACIÓN / CONTEXTO ========== */
+
+        sessionId: {
+            type: String,
+            required: true,
+            index: true,
+        },
+
+        /* ========== CONTENIDO PRINCIPAL ========== */
+
         title: {
             type: String,
             required: [true, 'El título es obligatorio'],
@@ -78,8 +88,8 @@ const noteSchema = new mongoose.Schema(
             default: [],
             validate: {
                 validator: v => v.length <= MAX_HISTORY,
-                message: `El historial no puede superar ${MAX_HISTORY}`
-            }
+                message: `El historial no puede superar ${MAX_HISTORY}`,
+            },
         },
 
         redoStack: {
@@ -87,15 +97,16 @@ const noteSchema = new mongoose.Schema(
             default: [],
             validate: {
                 validator: v => v.length <= MAX_HISTORY,
-                message: `El redo no puede superar ${MAX_HISTORY}`
-            }
+                message: `El redo no puede superar ${MAX_HISTORY}`,
+            },
         },
     },
     {
-        timestamps: true,
+        timestamps: true, // createdAt + updatedAt automáticos
         versionKey: false,
     }
 );
+
 
 /* ============================================================
    ÍNDICES OPTIMIZADOS

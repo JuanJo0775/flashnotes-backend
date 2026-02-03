@@ -5,6 +5,9 @@ const mongoose = require('mongoose');
 
 let mongoServer;
 
+// Mock sessionId para tests
+global.mockSessionId = 'test-session-123';
+
 // Antes de TODOS los tests
 beforeAll(async () => {
     // Crear servidor MongoDB en memoria

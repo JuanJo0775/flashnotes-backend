@@ -5,6 +5,9 @@ const mongoose = require('mongoose');
 const app = require('../../src/app');
 const Note = require('../../src/models/Note');
 
+// Helper para incluir la cookie de sesión en las requests
+const sendWithSession = req => req.set('Cookie', `sessionId=${global.mockSessionId}`);
+
 describe('Notes API - Integration Tests', () => {
 
     // ============================================
@@ -13,8 +16,8 @@ describe('Notes API - Integration Tests', () => {
 
     describe('POST /api/notes', () => {
         test('debe crear nota con 201', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({
                     title: 'Test Note',
                     content: 'Test Content'
@@ -29,8 +32,8 @@ describe('Notes API - Integration Tests', () => {
         });
 
         test('debe retornar 400 sin title', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ content: 'Content only' });
 
             expect(response.status).toBe(400);
@@ -38,32 +41,32 @@ describe('Notes API - Integration Tests', () => {
         });
 
         test('debe retornar 400 sin content', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: 'Title only' });
 
             expect(response.status).toBe(400);
         });
 
         test('debe retornar 400 con title vacío', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: '   ', content: 'Content' });
 
             expect(response.status).toBe(400);
         });
 
         test('debe retornar 400 con content vacío', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: 'Title', content: '   ' });
 
             expect(response.status).toBe(400);
         });
 
         test('debe hacer trim de espacios', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({
                     title: '  Trimmed  ',
                     content: '  Content  '
@@ -82,11 +85,11 @@ describe('Notes API - Integration Tests', () => {
     describe('GET /api/notes', () => {
         test('debe listar notas activas', async () => {
             // Crear notas de prueba
-            await Note.create({ title: 'Note 1', content: 'Content 1' });
-            await Note.create({ title: 'Note 2', content: 'Content 2' });
-            await Note.create({ title: 'Deleted', content: 'Content', isDeleted: true });
+            await Note.create({ title: 'Note 1', content: 'Content 1', sessionId: global.mockSessionId });
+            await Note.create({ title: 'Note 2', content: 'Content 2', sessionId: global.mockSessionId });
+            await Note.create({ title: 'Deleted', content: 'Content', isDeleted: true, sessionId: global.mockSessionId });
 
-            const response = await request(app).get('/api/notes');
+            const response = await sendWithSession(request(app).get('/api/notes'));
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveLength(2);
@@ -94,7 +97,7 @@ describe('Notes API - Integration Tests', () => {
         });
 
         test('debe retornar array vacío si no hay notas', async () => {
-            const response = await request(app).get('/api/notes');
+            const response = await sendWithSession(request(app).get('/api/notes'));
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual([]);
@@ -107,21 +110,23 @@ describe('Notes API - Integration Tests', () => {
 
     describe('GET /api/notes/trash', () => {
         test('debe listar solo notas eliminadas', async () => {
-            await Note.create({ title: 'Active', content: 'Content' });
+            await Note.create({ title: 'Active', content: 'Content', sessionId: global.mockSessionId });
             await Note.create({
                 title: 'Deleted 1',
                 content: 'Content',
                 isDeleted: true,
-                deletedAt: new Date()
+                deletedAt: new Date(),
+                sessionId: global.mockSessionId
             });
             await Note.create({
                 title: 'Deleted 2',
                 content: 'Content',
                 isDeleted: true,
-                deletedAt: new Date()
+                deletedAt: new Date(),
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app).get('/api/notes/trash');
+            const response = await sendWithSession(request(app).get('/api/notes/trash'));
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveLength(2);
@@ -137,11 +142,12 @@ describe('Notes API - Integration Tests', () => {
         test('debe actualizar nota correctamente', async () => {
             const note = await Note.create({
                 title: 'Original',
-                content: 'Original'
+                content: 'Original',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .patch(`/api/notes/${note._id}`)
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}`))
                 .send({ title: 'Updated' });
 
             expect(response.status).toBe(200);
@@ -153,16 +159,16 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 404 con ID inexistente', async () => {
             const fakeId = new mongoose.Types.ObjectId();
 
-            const response = await request(app)
-                .patch(`/api/notes/${fakeId}`)
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${fakeId}`))
                 .send({ title: 'Updated' });
 
             expect(response.status).toBe(404);
         });
 
         test('debe retornar 400 con ID inválido', async () => {
-            const response = await request(app)
-                .patch('/api/notes/invalid-id')
+            const response = await sendWithSession(request(app)
+                .patch('/api/notes/invalid-id'))
                 .send({ title: 'Updated' });
 
             expect(response.status).toBe(400);
@@ -171,7 +177,8 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 409 en conflicto de concurrencia', async () => {
             const note = await Note.create({
                 title: 'Original Title',
-                content: 'Original Content'
+                content: 'Original Content',
+                sessionId: global.mockSessionId
             });
 
             // Esperar un momento para asegurar que editedAt está definido
@@ -180,8 +187,8 @@ describe('Notes API - Integration Tests', () => {
             const freshNote = await Note.findById(note._id);
             const oldTimestamp = new Date(freshNote.editedAt.getTime() - 1000);
 
-            const response = await request(app)
-                .patch(`/api/notes/${note._id}`)
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}`))
                 .send({
                     title: 'Updated',
                     lastKnownUpdate: oldTimestamp.toISOString()
@@ -194,11 +201,12 @@ describe('Notes API - Integration Tests', () => {
         test('NO debe crear versión si no hay cambios reales', async () => {
             const note = await Note.create({
                 title: 'Same',
-                content: 'Same'
+                content: 'Same',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .patch(`/api/notes/${note._id}`)
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}`))
                 .send({ title: 'Same', content: 'Same' });
 
             expect(response.status).toBe(200);
@@ -214,17 +222,18 @@ describe('Notes API - Integration Tests', () => {
         test('debe deshacer cambios correctamente', async () => {
             const note = await Note.create({
                 title: 'Version 1',
-                content: 'Content 1'
+                content: 'Content 1',
+                sessionId: global.mockSessionId
             });
 
             // Hacer un cambio
-            await request(app)
-                .patch(`/api/notes/${note._id}`)
+            await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}`))
                 .send({ title: 'Version 2' });
 
             // Undo
-            const response = await request(app)
-                .post(`/api/notes/${note._id}/undo`);
+            const response = await sendWithSession(request(app)
+                .post(`/api/notes/${note._id}/undo`));
 
             expect(response.status).toBe(200);
             expect(response.body.title).toBe('Version 1');
@@ -234,11 +243,12 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 400 si no hay historial', async () => {
             const note = await Note.create({
                 title: 'New',
-                content: 'Content'
+                content: 'Content',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .post(`/api/notes/${note._id}/undo`);
+            const response = await sendWithSession(request(app)
+                .post(`/api/notes/${note._id}/undo`));
 
             expect(response.status).toBe(400);
             expect(response.body.error).toContain('No history');
@@ -247,8 +257,8 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 404 con ID inexistente', async () => {
             const fakeId = new mongoose.Types.ObjectId();
 
-            const response = await request(app)
-                .post(`/api/notes/${fakeId}/undo`);
+            const response = await sendWithSession(request(app)
+                .post(`/api/notes/${fakeId}/undo`));
 
             expect(response.status).toBe(404);
         });
@@ -262,20 +272,21 @@ describe('Notes API - Integration Tests', () => {
         test('debe rehacer cambios correctamente', async () => {
             const note = await Note.create({
                 title: 'Version 1',
-                content: 'Content 1'
+                content: 'Content 1',
+                sessionId: global.mockSessionId
             });
 
             // Cambio
-            await request(app)
-                .patch(`/api/notes/${note._id}`)
+            await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}`))
                 .send({ title: 'Version 2' });
 
             // Undo
-            await request(app).post(`/api/notes/${note._id}/undo`);
+            await sendWithSession(request(app).post(`/api/notes/${note._id}/undo`));
 
             // Redo
-            const response = await request(app)
-                .post(`/api/notes/${note._id}/redo`);
+            const response = await sendWithSession(request(app)
+                .post(`/api/notes/${note._id}/redo`));
 
             expect(response.status).toBe(200);
             expect(response.body.title).toBe('Version 2');
@@ -285,11 +296,12 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 400 si no hay acciones para rehacer', async () => {
             const note = await Note.create({
                 title: 'Note',
-                content: 'Content'
+                content: 'Content',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .post(`/api/notes/${note._id}/redo`);
+            const response = await sendWithSession(request(app)
+                .post(`/api/notes/${note._id}/redo`));
 
             expect(response.status).toBe(400);
         });
@@ -303,11 +315,12 @@ describe('Notes API - Integration Tests', () => {
         test('debe mover nota a papelera', async () => {
             const note = await Note.create({
                 title: 'Note',
-                content: 'Content'
+                content: 'Content',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .patch(`/api/notes/${note._id}/trash`);
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}/trash`));
 
             expect(response.status).toBe(200);
             expect(response.body.isDeleted).toBe(true);
@@ -317,8 +330,8 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 404 si nota no existe', async () => {
             const fakeId = new mongoose.Types.ObjectId();
 
-            const response = await request(app)
-                .patch(`/api/notes/${fakeId}/trash`);
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${fakeId}/trash`));
 
             expect(response.status).toBe(404);
         });
@@ -334,11 +347,12 @@ describe('Notes API - Integration Tests', () => {
                 title: 'Note',
                 content: 'Content',
                 isDeleted: true,
-                deletedAt: new Date()
+                deletedAt: new Date(),
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .patch(`/api/notes/${note._id}/restore`);
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}/restore`));
 
             expect(response.status).toBe(200);
             expect(response.body.isDeleted).toBe(false);
@@ -348,11 +362,12 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 404 si nota no está en papelera', async () => {
             const note = await Note.create({
                 title: 'Active',
-                content: 'Content'
+                content: 'Content',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .patch(`/api/notes/${note._id}/restore`);
+            const response = await sendWithSession(request(app)
+                .patch(`/api/notes/${note._id}/restore`));
 
             expect(response.status).toBe(404);
         });
@@ -368,11 +383,12 @@ describe('Notes API - Integration Tests', () => {
                 title: 'Note',
                 content: 'Content',
                 isDeleted: true,
-                deletedAt: new Date()
+                deletedAt: new Date(),
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .delete(`/api/notes/${note._id}/permanent`);
+            const response = await sendWithSession(request(app)
+                .delete(`/api/notes/${note._id}/permanent`));
 
             expect(response.status).toBe(204);
 
@@ -383,11 +399,12 @@ describe('Notes API - Integration Tests', () => {
         test('debe retornar 404 si nota no está en papelera', async () => {
             const note = await Note.create({
                 title: 'Active',
-                content: 'Content'
+                content: 'Content',
+                sessionId: global.mockSessionId
             });
 
-            const response = await request(app)
-                .delete(`/api/notes/${note._id}/permanent`);
+            const response = await sendWithSession(request(app)
+                .delete(`/api/notes/${note._id}/permanent`));
 
             expect(response.status).toBe(404);
         });
@@ -400,55 +417,55 @@ describe('Notes API - Integration Tests', () => {
     describe('Flujos complejos', () => {
         test('flujo completo: crear → editar → undo → redo', async () => {
             // Crear
-            let response = await request(app)
-                .post('/api/notes')
+            let response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: 'Version 1', content: 'Content 1' });
 
             const noteId = response.body._id;
             expect(response.status).toBe(201);
 
             // Editar
-            response = await request(app)
-                .patch(`/api/notes/${noteId}`)
+            response = await sendWithSession(request(app)
+                .patch(`/api/notes/${noteId}`))
                 .send({ title: 'Version 2' });
             expect(response.status).toBe(200);
             expect(response.body.title).toBe('Version 2');
 
             // Undo
-            response = await request(app)
-                .post(`/api/notes/${noteId}/undo`);
+            response = await sendWithSession(request(app)
+                .post(`/api/notes/${noteId}/undo`));
             expect(response.status).toBe(200);
             expect(response.body.title).toBe('Version 1');
 
             // Redo
-            response = await request(app)
-                .post(`/api/notes/${noteId}/redo`);
+            response = await sendWithSession(request(app)
+                .post(`/api/notes/${noteId}/redo`));
             expect(response.status).toBe(200);
             expect(response.body.title).toBe('Version 2');
         });
 
         test('flujo: crear → editar → papelera → restaurar → eliminar permanente', async () => {
             // Crear
-            let response = await request(app)
-                .post('/api/notes')
+            let response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: 'Note', content: 'Content' });
 
             const noteId = response.body._id;
 
             // A papelera
-            await request(app).patch(`/api/notes/${noteId}/trash`);
+            await sendWithSession(request(app).patch(`/api/notes/${noteId}/trash`));
 
             // Restaurar
-            response = await request(app)
-                .patch(`/api/notes/${noteId}/restore`);
+            response = await sendWithSession(request(app)
+                .patch(`/api/notes/${noteId}/restore`));
             expect(response.body.isDeleted).toBe(false);
 
             // Volver a papelera
-            await request(app).patch(`/api/notes/${noteId}/trash`);
+            await sendWithSession(request(app).patch(`/api/notes/${noteId}/trash`));
 
             // Eliminar permanente
-            response = await request(app)
-                .delete(`/api/notes/${noteId}/permanent`);
+            response = await sendWithSession(request(app)
+                .delete(`/api/notes/${noteId}/permanent`));
             expect(response.status).toBe(204);
 
             // Verificar que ya no existe
@@ -457,28 +474,28 @@ describe('Notes API - Integration Tests', () => {
         });
 
         test('undo después de edición debe invalidar redo', async () => {
-            let response = await request(app)
-                .post('/api/notes')
+            let response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: 'Version 1', content: 'Content 1' });
 
             const noteId = response.body._id;
 
             // Edit 1
-            await request(app)
-                .patch(`/api/notes/${noteId}`)
+            await sendWithSession(request(app)
+                .patch(`/api/notes/${noteId}`))
                 .send({ title: 'Version 2' });
 
             // Undo
-            await request(app).post(`/api/notes/${noteId}/undo`);
+            await sendWithSession(request(app).post(`/api/notes/${noteId}/undo`));
 
             // Edit 2 (esto invalida redo)
-            await request(app)
-                .patch(`/api/notes/${noteId}`)
+            await sendWithSession(request(app)
+                .patch(`/api/notes/${noteId}`))
                 .send({ title: 'Version 3' });
 
             // Intentar redo debe fallar
-            response = await request(app)
-                .post(`/api/notes/${noteId}/redo`);
+            response = await sendWithSession(request(app)
+                .post(`/api/notes/${noteId}/redo`));
             expect(response.status).toBe(400);
         });
     });
@@ -491,8 +508,8 @@ describe('Notes API - Integration Tests', () => {
         test('debe rechazar title muy largo', async () => {
             const longTitle = 'a'.repeat(201);
 
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: longTitle, content: 'Content' });
 
             expect(response.status).toBe(400);
@@ -501,16 +518,16 @@ describe('Notes API - Integration Tests', () => {
         test('debe rechazar content muy largo', async () => {
             const longContent = 'a'.repeat(10001);
 
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({ title: 'Title', content: longContent });
 
             expect(response.status).toBe(400);
         });
 
         test('debe sanitizar entrada con espacios', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({
                     title: '  Spaces  ',
                     content: '  Content  ',
@@ -524,8 +541,8 @@ describe('Notes API - Integration Tests', () => {
         });
 
         test('debe manejar caracteres especiales correctamente', async () => {
-            const response = await request(app)
-                .post('/api/notes')
+            const response = await sendWithSession(request(app)
+                .post('/api/notes'))
                 .send({
                     title: '<script>alert("xss")</script>',
                     content: 'Content & < >'
@@ -537,3 +554,4 @@ describe('Notes API - Integration Tests', () => {
     });
 
 });
+

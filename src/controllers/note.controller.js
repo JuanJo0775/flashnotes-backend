@@ -9,11 +9,9 @@ class NoteController {
      */
     async create(req, res) {
         try {
-            // Sanitizar entrada
             const sanitized = NoteDTO.sanitizeCreate(req.body);
-
-            // Validar
             const validation = NoteDTO.validateCreate(sanitized);
+
             if (!validation.valid) {
                 return res.status(400).json({
                     error: 'Validation failed',
@@ -21,7 +19,11 @@ class NoteController {
                 });
             }
 
-            const note = await noteService.createNote(sanitized);
+            const note = await noteService.createNote(
+                sanitized,
+                req.sessionId
+            );
+
             res.status(201).json(note);
         } catch (error) {
             res.status(500).json({ error: 'Internal server error' });
@@ -33,7 +35,9 @@ class NoteController {
      */
     async listActive(req, res) {
         try {
-            const notes = await noteService.listActiveNotes();
+            const notes = await noteService.listActiveNotes(
+                req.sessionId
+            );
             res.json(notes);
         } catch (error) {
             res.status(500).json({ error: 'Internal server error' });
@@ -45,7 +49,9 @@ class NoteController {
      */
     async listTrash(req, res) {
         try {
-            const notes = await noteService.listTrash();
+            const notes = await noteService.listTrash(
+                req.sessionId
+            );
             res.json(notes);
         } catch (error) {
             res.status(500).json({ error: 'Internal server error' });
@@ -58,12 +64,9 @@ class NoteController {
     async update(req, res) {
         try {
             const { id } = req.params;
-
-            // Sanitizar entrada
             const sanitized = NoteDTO.sanitizeUpdate(req.body);
-
-            // Validar
             const validation = NoteDTO.validateUpdate(sanitized);
+
             if (!validation.valid) {
                 return res.status(400).json({
                     error: 'Validation failed',
@@ -71,7 +74,12 @@ class NoteController {
                 });
             }
 
-            const note = await noteService.updateNote(id, sanitized);
+            const note = await noteService.updateNote(
+                id,
+                sanitized,
+                req.sessionId
+            );
+
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
@@ -93,7 +101,10 @@ class NoteController {
     async undo(req, res) {
         try {
             const { id } = req.params;
-            const note = await noteService.undoNote(id);
+            const note = await noteService.undoNote(
+                id,
+                req.sessionId
+            );
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
@@ -112,13 +123,16 @@ class NoteController {
     async redo(req, res) {
         try {
             const { id } = req.params;
-            const note = await noteService.redoNote(id);
+            const note = await noteService.redoNote(
+                id,
+                req.sessionId
+            );
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
                 return res.status(404).json({ error: 'Note not found' });
             }
-            if (error.code === 'NO_REDO') {
+            if (error.code === 'NO_HISTORY') {
                 return res.status(400).json({ error: error.message });
             }
             res.status(500).json({ error: 'Internal server error' });
@@ -126,12 +140,15 @@ class NoteController {
     }
 
     /**
-     * PATCH /api/notes/:id/trash
+     * POST /api/notes/:id/trash
      */
     async moveToTrash(req, res) {
         try {
             const { id } = req.params;
-            const note = await noteService.moveToTrash(id);
+            const note = await noteService.moveToTrash(
+                id,
+                req.sessionId
+            );
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
@@ -142,32 +159,38 @@ class NoteController {
     }
 
     /**
-     * PATCH /api/notes/:id/restore
+     * POST /api/notes/:id/restore
      */
-    async restore(req, res) {
+    async restoreFromTrash(req, res) {
         try {
             const { id } = req.params;
-            const note = await noteService.restoreFromTrash(id);
+            const note = await noteService.restoreFromTrash(
+                id,
+                req.sessionId
+            );
             res.json(note);
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
-                return res.status(404).json({ error: 'Note not found in trash' });
+                return res.status(404).json({ error: 'Note not in trash' });
             }
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 
     /**
-     * DELETE /api/notes/:id/permanent
+     * DELETE /api/notes/:id
      */
     async deletePermanently(req, res) {
         try {
             const { id } = req.params;
-            await noteService.deletePermanently(id);
+            await noteService.deletePermanently(
+                id,
+                req.sessionId
+            );
             res.status(204).send();
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
-                return res.status(404).json({ error: 'Note not found in trash' });
+                return res.status(404).json({ error: 'Note not in trash' });
             }
             res.status(500).json({ error: 'Internal server error' });
         }

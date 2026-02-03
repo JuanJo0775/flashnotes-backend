@@ -32,12 +32,12 @@ describe('NoteService - Casos de Uso', () => {
             const result = await noteService.createNote({
                 title: 'Test',
                 content: 'Content'
-            });
+            }, global.mockSessionId);
 
             expect(noteRepository.create).toHaveBeenCalledWith({
                 title: 'Test',
                 content: 'Content'
-            });
+            }, global.mockSessionId);
             expect(result).toEqual(mockNote);
         });
     });
@@ -63,7 +63,7 @@ describe('NoteService - Casos de Uso', () => {
                 noteService.updateNote('507f1f77bcf86cd799439011', {
                     title: 'New',
                     lastKnownUpdate: '2024-01-01T09:00:00Z' // Timestamp antiguo
-                })
+                }, global.mockSessionId)
             ).rejects.toThrow('CONFLICT: Note was modified by another session');
         });
 
@@ -85,7 +85,7 @@ describe('NoteService - Casos de Uso', () => {
             await noteService.updateNote('507f1f77bcf86cd799439011', {
                 title: 'Updated',
                 lastKnownUpdate: editedAt.toISOString()
-            });
+            }, global.mockSessionId);
 
             expect(noteRepository.save).toHaveBeenCalled();
         });
@@ -105,7 +105,7 @@ describe('NoteService - Casos de Uso', () => {
 
             await noteService.updateNote('507f1f77bcf86cd799439011', {
                 title: 'Updated'
-            });
+            }, global.mockSessionId);
 
             expect(noteRepository.save).toHaveBeenCalled();
         });
@@ -130,7 +130,7 @@ describe('NoteService - Casos de Uso', () => {
 
             const result = await noteService.updateNote('123', {
                 title: 'New Title'
-            });
+            }, global.mockSessionId);
 
             expect(result.title).toBe('New Title');
             expect(result.content).toBe('Original Content');
@@ -150,7 +150,7 @@ describe('NoteService - Casos de Uso', () => {
 
             const result = await noteService.updateNote('123', {
                 content: 'New Content'
-            });
+            }, global.mockSessionId);
 
             expect(result.title).toBe('Original Title');
             expect(result.content).toBe('New Content');
@@ -166,7 +166,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(null);
 
             await expect(
-                noteService.undoNote('507f1f77bcf86cd799439011')
+                noteService.undoNote('507f1f77bcf86cd799439011', global.mockSessionId)
             ).rejects.toThrow('NOTE_NOT_FOUND');
         });
 
@@ -182,7 +182,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(mockNote);
 
             await expect(
-                noteService.undoNote('507f1f77bcf86cd799439011')
+                noteService.undoNote('507f1f77bcf86cd799439011', global.mockSessionId)
             ).rejects.toThrow('No history available to undo');
         });
 
@@ -200,7 +200,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(mockNote);
             noteRepository.save.mockImplementation(note => Promise.resolve(note));
 
-            const result = await noteService.undoNote('123');
+            const result = await noteService.undoNote('123', global.mockSessionId);
 
             expect(result.title).toBe('Previous');
             expect(result.redoStack).toHaveLength(1);
@@ -224,7 +224,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(mockNote);
 
             await expect(
-                noteService.redoNote('507f1f77bcf86cd799439011')
+                noteService.redoNote('507f1f77bcf86cd799439011', global.mockSessionId)
             ).rejects.toThrow('No actions available to redo');
         });
 
@@ -242,7 +242,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(mockNote);
             noteRepository.save.mockImplementation(note => Promise.resolve(note));
 
-            const result = await noteService.redoNote('123');
+            const result = await noteService.redoNote('123', global.mockSessionId);
 
             expect(result.title).toBe('Redone');
             expect(result.redoStack).toHaveLength(0);
@@ -266,7 +266,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(mockNote);
             noteRepository.save.mockImplementation(note => Promise.resolve(note));
 
-            const result = await noteService.moveToTrash('123');
+            const result = await noteService.moveToTrash('123', global.mockSessionId);
 
             expect(result.isDeleted).toBe(true);
             expect(result.deletedAt).toBeInstanceOf(Date);
@@ -276,7 +276,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(null);
 
             await expect(
-                noteService.moveToTrash('123')
+                noteService.moveToTrash('123', global.mockSessionId)
             ).rejects.toThrow('NOTE_NOT_FOUND');
         });
     });
@@ -294,7 +294,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findDeletedById.mockResolvedValue(mockNote);
             noteRepository.save.mockImplementation(note => Promise.resolve(note));
 
-            const result = await noteService.restoreFromTrash('123');
+            const result = await noteService.restoreFromTrash('123', global.mockSessionId);
 
             expect(result.isDeleted).toBe(false);
             expect(result.deletedAt).toBe(null);
@@ -304,7 +304,7 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findDeletedById.mockResolvedValue(null);
 
             await expect(
-                noteService.restoreFromTrash('123')
+                noteService.restoreFromTrash('123', global.mockSessionId)
             ).rejects.toThrow('NOTE_NOT_IN_TRASH');
         });
     });
@@ -319,16 +319,16 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findDeletedById.mockResolvedValue(mockNote);
             noteRepository.deletePermanently.mockResolvedValue(true);
 
-            await noteService.deletePermanently('123');
+            await noteService.deletePermanently('123', global.mockSessionId);
 
-            expect(noteRepository.deletePermanently).toHaveBeenCalledWith('123');
+            expect(noteRepository.deletePermanently).toHaveBeenCalledWith('123', global.mockSessionId);
         });
 
         test('debe lanzar error si nota no está en papelera', async () => {
             noteRepository.findDeletedById.mockResolvedValue(null);
 
             await expect(
-                noteService.deletePermanently('123')
+                noteService.deletePermanently('123', global.mockSessionId)
             ).rejects.toThrow('NOTE_NOT_IN_TRASH');
         });
     });
@@ -354,14 +354,14 @@ describe('NoteService - Casos de Uso', () => {
             noteRepository.findActiveById.mockResolvedValue(mockNote);
             noteRepository.save.mockImplementation(note => Promise.resolve(note));
 
-            let result = await noteService.undoNote('123');
+            let result = await noteService.undoNote('123', global.mockSessionId);
             expect(result.redoStack).toHaveLength(1);
 
             // Simular edit (esto debe invalidar redo)
             mockNote = result;
             noteRepository.findActiveById.mockResolvedValue(mockNote);
 
-            result = await noteService.updateNote('123', { title: 'V3' });
+            result = await noteService.updateNote('123', { title: 'V3' }, global.mockSessionId);
             expect(result.redoStack).toHaveLength(0);
         });
     });

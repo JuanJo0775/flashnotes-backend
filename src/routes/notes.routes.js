@@ -59,7 +59,7 @@ router.patch('/:id/trash',
 // Restaurar nota desde la papelera
 router.patch('/:id/restore',
     validateMongoId,
-    (req, res) => noteController.restore(req, res)
+    (req, res) => noteController.restoreFromTrash(req, res)
 );
 
 // Eliminar nota de forma permanente
