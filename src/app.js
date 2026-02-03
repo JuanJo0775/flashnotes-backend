@@ -1,27 +1,19 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-
-const notesRoutes = require('./routes/notes.routes');
 const sessionMiddleware = require('./middleware/session');
-const responseFormatter = require('./middleware/responseFormatter');
+const requestLogger = require('./middleware/requestLogger');
 const errorHandler = require('./middleware/errorHandler');
+const notesRoutes = require('./routes/notes.routes');
 
 const app = express();
 
-// IMPORTANTE: cookieParser debe ir ANTES de cors
-app.use(cookieParser());
-
-// CORS configurado para permitir cookies y múltiples orígenes
-// En desarrollo: permite localhost:3000, localhost:3001, localhost:5000
-// En producción: ajustar según dominio real
+// CORS: permitir múltiples orígenes en desarrollo
 const allowedOrigins = [
-    'http://localhost:3000',    // Next.js dev
-    'http://localhost:3001',    // Next.js alternativo
-    'http://localhost:5000',    // Backend mismo
+    'http://localhost:3000',
+    'http://localhost:5173',
     'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-    'http://127.0.0.1:5000',
+    'http://127.0.0.1:5173'
 ];
 
 app.use(cors({
@@ -42,11 +34,16 @@ app.use(cors({
 
 app.use(express.json());
 
+// Cookie parser: DEBE ir ANTES del middleware de sesión
+app.use(cookieParser());
+
 // Aplicar middleware de sesión a todas las rutas
 app.use(sessionMiddleware);
 
-// Aplicar formateador de respuestas ANTES de las rutas
-app.use(responseFormatter);
+// Logger de requests (desarrollo)
+if (process.env.NODE_ENV !== 'test') {
+    app.use(requestLogger);
+}
 
 // Rutas
 app.use('/api/notes', notesRoutes);
@@ -54,22 +51,16 @@ app.use('/api/notes', notesRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString()
+        success: true,
+        data: {
+            status: 'OK',
+            timestamp: new Date().toISOString()
+        },
+        statusCode: 200
     });
 });
 
-// Manejo de rutas no encontradas
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        error: 'NOT_FOUND',
-        message: 'Ruta no encontrada',
-        statusCode: 404
-    });
-});
-
-// Middleware global de manejo de errores (DEBE IR AL FINAL)
+// Middleware de errores (DEBE IR AL FINAL)
 app.use(errorHandler);
 
 module.exports = app;

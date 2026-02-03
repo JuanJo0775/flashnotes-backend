@@ -50,6 +50,12 @@ router.post('/:id/redo',
     (req, res) => noteController.redo(req, res)
 );
 
+// Obtener historial de cambios
+router.get('/:id/history',
+    validateMongoId,
+    (req, res) => noteController.getHistory(req, res)
+);
+
 // Enviar nota a la papelera
 router.patch('/:id/trash',
     validateMongoId,

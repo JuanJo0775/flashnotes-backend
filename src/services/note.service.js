@@ -30,11 +30,25 @@ class NoteService {
      * Actualizar nota
      */
     async updateNote(id, updates, sessionId) {
+        console.debug(`[NoteService.updateNote] Looking for note`, {
+            id,
+            sessionId: sessionId?.substring(0, 8) + '...'
+        });
+
         const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
+            console.warn(`[NoteService.updateNote] Note NOT FOUND`, {
+                id,
+                sessionId: sessionId?.substring(0, 8) + '...'
+            });
             throw new Error('NOTE_NOT_FOUND');
         }
+
+        console.debug(`[NoteService.updateNote] Note found`, {
+            id: note._id,
+            title: note.title?.substring(0, 20)
+        });
 
         // Verificar si hay cambios reales usando la lógica del dominio
         const hasChanges = NoteHistory.hasRealChanges(note, updates);
@@ -47,7 +61,7 @@ class NoteService {
         // Si se envió lastKnownUpdate, validar concurrencia
         if (updates.lastKnownUpdate) {
             const lastKnown = new Date(updates.lastKnownUpdate).toISOString();
-            const current = note.editedAt ? new Date(note.editedAt).toISOString() : null;
+            const current = note.updatedAt ? new Date(note.updatedAt).toISOString() : null;
             if (lastKnown !== current) {
                 const error = new Error('CONFLICT: Note was modified by another session');
                 error.code = 'CONFLICT';
@@ -62,7 +76,6 @@ class NoteService {
         if (updates.title !== undefined) note.title = updates.title;
         if (updates.content !== undefined) note.content = updates.content;
 
-        note.editedAt = new Date();
 
         // Limpiar redo al editar
         note.redoStack = [];
@@ -103,9 +116,18 @@ class NoteService {
      * Mover a papelera (soft delete)
      */
     async moveToTrash(id, sessionId) {
+        console.debug(`[NoteService.moveToTrash] Looking for active note`, {
+            id,
+            sessionId: sessionId?.substring(0, 8) + '...'
+        });
+
         const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
+            console.warn(`[NoteService.moveToTrash] Note NOT FOUND`, {
+                id,
+                sessionId: sessionId?.substring(0, 8) + '...'
+            });
             throw new Error('NOTE_NOT_FOUND');
         }
 
@@ -142,6 +164,22 @@ class NoteService {
         }
 
         await noteRepository.deletePermanently(id, sessionId);
+    }
+
+    /**
+     * Obtener historial de cambios de una nota
+     */
+    async getHistory(id, sessionId) {
+        const note = await noteRepository.findActiveById(id, sessionId);
+
+        if (!note) {
+            throw new Error('NOTE_NOT_FOUND');
+        }
+
+        return {
+            versions: note.versions || [],
+            redoStack: note.redoStack || []
+        };
     }
 }
 

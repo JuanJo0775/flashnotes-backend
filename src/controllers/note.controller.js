@@ -27,7 +27,11 @@ class NoteController {
                 req.sessionId
             );
 
-            res.status(201).json(note);
+            res.status(201).json({
+                success: true,
+                data: note,
+                statusCode: 201
+            });
         } catch (error) {
             res.status(500).json({
                 success: false,
@@ -46,9 +50,18 @@ class NoteController {
             const notes = await noteService.listActiveNotes(
                 req.sessionId
             );
-            res.json(notes);
+            res.json({
+                success: true,
+                data: notes,
+                statusCode: 200
+            });
         } catch (error) {
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
@@ -60,9 +73,18 @@ class NoteController {
             const notes = await noteService.listTrash(
                 req.sessionId
             );
-            res.json(notes);
+            res.json({
+                success: true,
+                data: notes,
+                statusCode: 200
+            });
         } catch (error) {
-            res.status(500).json({ error: 'Internal server error' });
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
         }
     }
 
@@ -72,6 +94,12 @@ class NoteController {
     async update(req, res) {
         try {
             const { id } = req.params;
+            console.debug(`[NoteController.update] Received update request`, {
+                id,
+                sessionId: req.sessionId?.substring(0, 8) + '...',
+                bodyKeys: Object.keys(req.body)
+            });
+
             const sanitized = NoteDTO.sanitizeUpdate(req.body);
             const validation = NoteDTO.validateUpdate(sanitized);
 
@@ -91,7 +119,11 @@ class NoteController {
                 req.sessionId
             );
 
-            res.json(note);
+            res.json({
+                success: true,
+                data: note,
+                statusCode: 200
+            });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
                 return res.status(404).json({
@@ -128,7 +160,11 @@ class NoteController {
                 id,
                 req.sessionId
             );
-            res.json(note);
+            res.json({
+                success: true,
+                data: note,
+                statusCode: 200
+            });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
                 return res.status(404).json({
@@ -165,7 +201,11 @@ class NoteController {
                 id,
                 req.sessionId
             );
-            res.json(note);
+            res.json({
+                success: true,
+                data: note,
+                statusCode: 200
+            });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
                 return res.status(404).json({
@@ -195,11 +235,20 @@ class NoteController {
     async moveToTrash(req, res) {
         try {
             const { id } = req.params;
+            console.debug(`[NoteController.moveToTrash] Received trash request`, {
+                id,
+                sessionId: req.sessionId?.substring(0, 8) + '...'
+            });
+
             const note = await noteService.moveToTrash(
                 id,
                 req.sessionId
             );
-            res.json(note);
+            res.json({
+                success: true,
+                data: note,
+                statusCode: 200
+            });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
                 return res.status(404).json({
@@ -225,7 +274,11 @@ class NoteController {
                 id,
                 req.sessionId
             );
-            res.json(note);
+            res.json({
+                success: true,
+                data: note,
+                statusCode: 200
+            });
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
                 return res.status(404).json({
@@ -251,14 +304,48 @@ class NoteController {
                 id,
                 req.sessionId
             );
-            // 204 No Content - no devuelve cuerpo
-            res.status(204).send();
+            // 200 OK con confirmación
+            res.status(200).json({
+                success: true,
+                message: 'Nota eliminada permanentemente',
+                statusCode: 200
+            });
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
                 return res.status(404).json({
                     success: false,
                     error: 'NOTE_NOT_IN_TRASH',
                     message: 'La nota no está en la papelera',
+                    statusCode: 404
+                });
+            }
+            res.status(500).json({
+                success: false,
+                error: 'INTERNAL_SERVER_ERROR',
+                message: 'Error interno del servidor',
+                statusCode: 500
+            });
+        }
+    }
+
+    /**
+     * GET /api/notes/:id/history
+     */
+    async getHistory(req, res) {
+        try {
+            const { id } = req.params;
+            const history = await noteService.getHistory(id, req.sessionId);
+            return res.status(200).json({
+                success: true,
+                data: history,
+                statusCode: 200
+            });
+        } catch (error) {
+            if (error.message === 'NOTE_NOT_FOUND') {
+                return res.status(404).json({
+                    success: false,
+                    error: 'NOTE_NOT_FOUND',
+                    message: 'La nota solicitada no existe o fue eliminada',
                     statusCode: 404
                 });
             }

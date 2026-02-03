@@ -14,7 +14,15 @@
  * }
  */
 function errorHandler(err, req, res, next) {
-    console.error('Error:', err);
+    // Loguear stack completo con timestamp para debugging
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] Error:`, {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+        method: req.method,
+        path: req.path
+    });
 
     // Error de validación de Mongoose
     if (err.name === 'ValidationError') {

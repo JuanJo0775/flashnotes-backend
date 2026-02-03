@@ -48,16 +48,16 @@ const noteSchema = new mongoose.Schema(
             type: String,
             required: [true, 'El título es obligatorio'],
             trim: true,
-            minlength: [3, 'El título debe tener al menos 3 caracteres'],
+            minlength: [1, 'El título debe tener al menos 1 carácter'],
             maxlength: [100, 'El título no puede superar los 100 caracteres'],
             index: true,
         },
 
         content: {
             type: String,
-            required: [true, 'El contenido es obligatorio'],
+            required: false,
             trim: true,
-            minlength: [1, 'El contenido no puede estar vacío'],
+            default: '' // Permitir contenido vacío al crear notas
         },
 
         /* ========== TIMESTAMP DE EDICIÓN (PARA CONCURRENCIA) ========== */

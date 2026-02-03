@@ -52,7 +52,7 @@ describe('NoteService - Casos de Uso', () => {
                 _id: '507f1f77bcf86cd799439011',
                 title: 'Current',
                 content: 'Content',
-                editedAt: new Date('2024-01-01T10:00:00Z'),
+                updatedAt: new Date('2024-01-01T10:00:00Z'),
                 versions: [],
                 redoStack: []
             };
@@ -68,12 +68,12 @@ describe('NoteService - Casos de Uso', () => {
         });
 
         test('debe actualizar si timestamps coinciden', async () => {
-            const editedAt = new Date('2024-01-01T10:00:00Z');
+            const updatedAt = new Date('2024-01-01T10:00:00Z');
             const mockNote = {
                 _id: '507f1f77bcf86cd799439011',
                 title: 'Current',
                 content: 'Content',
-                editedAt,
+                updatedAt,
                 versions: [],
                 redoStack: [],
                 save: jest.fn().mockResolvedValue(true)
@@ -84,7 +84,7 @@ describe('NoteService - Casos de Uso', () => {
 
             await noteService.updateNote('507f1f77bcf86cd799439011', {
                 title: 'Updated',
-                lastKnownUpdate: editedAt.toISOString()
+                lastKnownUpdate: updatedAt.toISOString()
             }, global.mockSessionId);
 
             expect(noteRepository.save).toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe('NoteService - Casos de Uso', () => {
                 _id: '507f1f77bcf86cd799439011',
                 title: 'Current',
                 content: 'Content',
-                editedAt: new Date(),
+                updatedAt: new Date(),
                 versions: [],
                 redoStack: []
             };

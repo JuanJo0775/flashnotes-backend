@@ -11,20 +11,22 @@ class NoteDTO {
     static validateCreate(data) {
         const errors = [];
 
+        // Title: debe ser string no vacío y máximo 100 chars (coincide con model)
         if (!data.title || typeof data.title !== 'string') {
             errors.push('title is required and must be a string');
         } else if (data.title.trim().length === 0) {
             errors.push('title cannot be empty');
-        } else if (data.title.length > 200) {
-            errors.push('title cannot exceed 200 characters');
+        } else if (data.title.length > 100) {
+            errors.push('title cannot exceed 100 characters');
         }
 
-        if (!data.content || typeof data.content !== 'string') {
+        // Content: debe ser string (se permite cadena vacía '')
+        if (typeof data.content !== 'string') {
             errors.push('content is required and must be a string');
-        } else if (data.content.trim().length === 0) {
-            errors.push('content cannot be empty');
-        } else if (data.content.length > 10000) {
-            errors.push('content cannot exceed 10000 characters');
+        } else {
+            if (data.content.length > 10000) {
+                errors.push('content cannot exceed 10000 characters');
+            }
         }
 
         return {
@@ -45,8 +47,8 @@ class NoteDTO {
                 errors.push('title must be a string');
             } else if (data.title.trim().length === 0) {
                 errors.push('title cannot be empty');
-            } else if (data.title.length > 200) {
-                errors.push('title cannot exceed 200 characters');
+            } else if (data.title.length > 100) {
+                errors.push('title cannot exceed 100 characters');
             }
         }
 
@@ -54,11 +56,10 @@ class NoteDTO {
         if (data.content !== undefined) {
             if (typeof data.content !== 'string') {
                 errors.push('content must be a string');
-            } else if (data.content.trim().length === 0) {
-                errors.push('content cannot be empty');
             } else if (data.content.length > 10000) {
                 errors.push('content cannot exceed 10000 characters');
             }
+            // NOTA: En update permitimos contenido vacío (el usuario puede borrar todo)
         }
 
         // Al menos uno debe estar presente
@@ -76,9 +77,13 @@ class NoteDTO {
      * Sanitiza entrada (whitelist + trim)
      */
     static sanitizeCreate(data) {
+        const rawTitle = (data.title || '').trim();
+        const title = rawTitle.length ? rawTitle : 'Nueva nota';
+        const content = (data.content ?? '').trim();
+
         return {
-            title: data.title?.trim(),
-            content: data.content?.trim()
+            title,
+            content
         };
     }
 

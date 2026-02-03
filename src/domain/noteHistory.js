@@ -199,7 +199,6 @@ class NoteHistoryDomain {
         note.content = res.note.content;
         note.versions = res.note.versions;
         note.redoStack = res.note.redoStack;
-        note.editedAt = res.note.editedAt;
     }
 }
 
