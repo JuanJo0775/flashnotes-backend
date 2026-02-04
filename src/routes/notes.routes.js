@@ -2,9 +2,24 @@
 
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 
 const noteController = require('../controllers/note.controller');
 const validateMongoId = require('../middleware/validateId');
+
+// SECURITY: Rate limiting estricto para operaciones sensibles (delete)
+const deleteRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 10, // 10 deletes máximo por IP en 15 min
+    message: {
+        success: false,
+        error: 'TOO_MANY_REQUESTS',
+        message: 'Demasiadas solicitudes de eliminación. Intente más tarde.',
+        statusCode: 429
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 
 // ======================================================
@@ -39,13 +54,13 @@ router.patch('/:id',
 );
 
 // Deshacer último cambio (undo)
-router.post('/:id/undo',
+router.patch('/:id/undo',
     validateMongoId,
     (req, res) => noteController.undo(req, res)
 );
 
 // Rehacer cambio deshecho (redo)
-router.post('/:id/redo',
+router.patch('/:id/redo',
     validateMongoId,
     (req, res) => noteController.redo(req, res)
 );
@@ -71,6 +86,7 @@ router.patch('/:id/restore',
 // Eliminar nota de forma permanente
 router.delete('/:id/permanent',
     validateMongoId,
+    deleteRateLimiter, // Rate limiting estricto para operaciones destructivas
     (req, res) => noteController.deletePermanently(req, res)
 );
 

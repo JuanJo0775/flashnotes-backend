@@ -21,7 +21,8 @@ const sessionMiddleware = (req, res, next) => {
         res.cookie('sessionId', req.sessionId, {
             httpOnly: true,
             maxAge: 1000 * 60 * 60 * 24 * 365 * 10, // 10 años
-            sameSite: 'lax'
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production' // HTTPS en producción
         });
     }
 

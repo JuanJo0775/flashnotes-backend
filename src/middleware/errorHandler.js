@@ -1,5 +1,7 @@
 // src/middleware/errorHandler.js
 
+const crypto = require('crypto');
+
 /**
  * Middleware global de manejo de errores
  * Debe ir al final de todas las rutas en app.js
@@ -14,6 +16,14 @@
  * }
  */
 function errorHandler(err, req, res, next) {
+    // SECURITY: Hash anónimo del sessionId con SHA-256 truncado
+    const sessionHash = req.sessionId
+        ? crypto.createHash('sha256')
+            .update(req.sessionId)
+            .digest('hex')
+            .substring(0, 8)
+        : 'anon';
+    
     // Loguear stack completo con timestamp para debugging
     const timestamp = new Date().toISOString();
     console.error(`[${timestamp}] Error:`, {
@@ -21,7 +31,8 @@ function errorHandler(err, req, res, next) {
         message: err.message,
         stack: err.stack,
         method: req.method,
-        path: req.path
+        path: req.path,
+        sessionHash
     });
 
     // Error de validación de Mongoose
@@ -46,12 +57,43 @@ function errorHandler(err, req, res, next) {
         });
     }
 
-    // Error por defecto
-    res.status(500).json({
+    // Payload demasiado grande
+    if (err.type === 'entity.too.large' || err.status === 413) {
+        return res.status(413).json({
+            success: false,
+            error: 'PAYLOAD_TOO_LARGE',
+            message: 'El payload excede el tamaño permitido',
+            statusCode: 413
+        });
+    }
+
+    // Error de token CSRF inválido
+    if (err.code === 'EBADCSRFTOKEN') {
+        return res.status(403).json({
+            success: false,
+            error: 'INVALID_CSRF_TOKEN',
+            message: 'Token de seguridad inválido o expirado. Recarga la página.',
+            statusCode: 403
+        });
+    }
+
+    // Error de TypeError (posible problema de sesión/CSRF/middleware)
+    if (err.name === 'TypeError') {
+        console.error('[ERROR] TypeError detectado - posible problema de configuración:', err.message);
+        return res.status(500).json({
+            success: false,
+            error: 'CONFIGURATION_ERROR',
+            message: 'Error de configuración del servidor. Contacta al administrador.',
+            statusCode: 500
+        });
+    }
+
+    // Error por defecto - asegurarse de siempre devolver JSON
+    res.status(err.status || 500).json({
         success: false,
-        error: 'INTERNAL_SERVER_ERROR',
-        message: 'Error interno del servidor',
-        statusCode: 500
+        error: err.code || 'INTERNAL_SERVER_ERROR',
+        message: err.message || 'Error interno del servidor',
+        statusCode: err.status || 500
     });
 }
 

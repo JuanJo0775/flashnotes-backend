@@ -18,6 +18,15 @@ class NoteDTO {
             errors.push('title cannot be empty');
         } else if (data.title.length > 100) {
             errors.push('title cannot exceed 100 characters');
+        } else {
+            // SECURITY: Validar caracteres permitidos (igual que frontend validators.ts)
+            // Permite: letras Unicode, números, espacios, puntuación segura
+            // Rechaza: HTML tags, caracteres de control (newlines, tabs), scripts, emojis
+            // Solo permite espacio normal (U+0020), no tabs/newlines/otros espacios Unicode
+            const titleRegex = /^[\p{L}\p{N} \-.,!?'"()&*+/=\[\]{}@#$%^~`|\\:;«»„"„"…–—~]{1,100}$/u;
+            if (!titleRegex.test(data.title.trim())) {
+                errors.push('title contains invalid characters');
+            }
         }
 
         // Content: debe ser string (se permite cadena vacía '')
@@ -49,6 +58,12 @@ class NoteDTO {
                 errors.push('title cannot be empty');
             } else if (data.title.length > 100) {
                 errors.push('title cannot exceed 100 characters');
+            } else {
+                // SECURITY: Validar caracteres permitidos
+                const titleRegex = /^[\p{L}\p{N} \-.,!?'"()&*+/=\[\]{}@#$%^~`|\\:;«»„"„"…–—~]{1,100}$/u;
+                if (!titleRegex.test(data.title.trim())) {
+                    errors.push('title contains invalid characters');
+                }
             }
         }
 

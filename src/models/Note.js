@@ -112,10 +112,20 @@ const noteSchema = new mongoose.Schema(
    ÍNDICES OPTIMIZADOS
 ============================================================ */
 
-// Listado de notas activas
-noteSchema.index({ isDeleted: 1, createdAt: -1 });
+// Índice para filtrar por sesión y estado de eliminación (query común)
+noteSchema.index({ sessionId: 1, isDeleted: 1 });
 
-// Listado de papelera
+// Índice para ordenar notas activas por fecha de edición (listActive, listTrash)
+noteSchema.index({ editedAt: -1 });
+
+// Índice compuesto para listado de papelera
 noteSchema.index({ isDeleted: 1, deletedAt: -1 });
 
+// Índice para consultas por sesión y createdAt
+noteSchema.index({ sessionId: 1, createdAt: -1 });
+
+// Índice compuesto para consultas frecuentes: filtrar por sesión, estado y ordenar por edición
+noteSchema.index({ sessionId: 1, isDeleted: 1, editedAt: -1 });
+
 module.exports = mongoose.model('Note', noteSchema);
+

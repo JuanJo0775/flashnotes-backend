@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node ./bin/www",
     "test": "jest --runInBand",
+    "test:backend": "npm run test",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest tests/unit",
@@ -13,13 +14,18 @@
   "dependencies": {
     "cookie-parser": "~1.4.4",
     "cors": "^2.8.6",
+    "csurf": "^1.11.0",
     "debug": "~2.6.9",
     "dotenv": "^17.2.3",
     "express": "~4.16.1",
+    "express-rate-limit": "^7.1.5",
     "express-session": "^1.19.0",
+    "express-validator": "^7.3.1",
+    "helmet": "^7.1.0",
     "mongoose": "^9.1.5",
     "morgan": "~1.9.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "jest": "^30.2.0",

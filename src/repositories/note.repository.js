@@ -15,23 +15,58 @@ class NoteRepository {
     }
 
     /**
-     * Listar notas activas de la sesión
+     * Listar notas activas de la sesión con paginación
+     * @param {string} sessionId - ID de la sesión
+     * @param {number} skip - Número de registros a saltar
+     * @param {number} limit - Número máximo de registros a retornar
      */
-    async findAllActive(sessionId) {
+    async findAllActive(sessionId, skip = 0, limit = 20) {
         return await Note.find({
             isDeleted: false,
             sessionId
-        }).sort({ createdAt: -1 });
+        })
+        .sort({ editedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(); // Optimización: no hidratar modelos completos para listados
     }
 
     /**
-     * Listar notas eliminadas (papelera) de la sesión
+     * Contar notas activas de la sesión
      */
-    async findAllDeleted(sessionId) {
+    async countActive(sessionId) {
+        return await Note.countDocuments({
+            isDeleted: false,
+            sessionId
+        });
+    }
+
+    /**
+     * Listar notas eliminadas (papelera) de la sesión con paginación
+     * @param {string} sessionId - ID de la sesión
+     * @param {number} skip - Número de registros a saltar
+     * @param {number} limit - Número máximo de registros a retornar
+     */
+    async findAllDeleted(sessionId, skip = 0, limit = 20) {
         return await Note.find({
             isDeleted: true,
             sessionId
-        }).sort({ deletedAt: -1 });
+        })
+        .select('_id title content deletedAt createdAt updatedAt')
+        .sort({ deletedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    }
+
+    /**
+     * Contar notas eliminadas de la sesión
+     */
+    async countDeleted(sessionId) {
+        return await Note.countDocuments({
+            isDeleted: true,
+            sessionId
+        });
     }
 
     /**

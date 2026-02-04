@@ -2,14 +2,14 @@
 /**
  * Tests de contrato API
  * Validan que el backend devuelve respuestas en el formato esperado
- * según API.md
+ * segï¿½n API.md
  * 
- * Nota: setup.js maneja la conexión a MongoDB automáticamente
+ * Nota: setup.js maneja la conexiï¿½n a MongoDB automï¿½ticamente
  */
 const request = require('supertest');
 const app = require('../../src/app');
 const Note = require('../../src/models/Note');
-// Helper para incluir la cookie de sesión
+// Helper para incluir la cookie de sesiï¿½n
 const sendWithSession = req => req.set('Cookie', `sessionId=${global.mockSessionId}`);
 describe('API Contract - Response Format', () => {
     beforeEach(async () => {
@@ -66,7 +66,7 @@ describe('API Contract - Response Format', () => {
             expect(updateRes.body).toHaveProperty('success', true);
             expect(updateRes.body.data.title).toBe('Updated');
         });
-        test('DELETE /api/notes/:id/permanent devuelve 204', async () => {
+        test('DELETE /api/notes/:id/permanent devuelve 200 con body', async () => {
             const createRes = await sendWithSession(request(app)
                 .post('/api/notes'))
                 .send({
@@ -78,15 +78,17 @@ describe('API Contract - Response Format', () => {
                 .patch(`/api/notes/${noteId}/trash`));
             const deleteRes = await sendWithSession(request(app)
                 .delete(`/api/notes/${noteId}/permanent`));
-            expect(deleteRes.status).toBe(204);
+            expect(deleteRes.status).toBe(200);
+            expect(deleteRes.body).toHaveProperty('success', true);
+            expect(deleteRes.body).toHaveProperty('message');
         });
     });
     describe('Respuesta de Error (4xx, 5xx)', () => {
-        test('Validación fallida devuelve 400 con error code', async () => {
+        test('Validaciï¿½n fallida devuelve 400 con error code', async () => {
             const res = await sendWithSession(request(app)
                 .post('/api/notes'))
                 .send({
-                    title: '',
+                    title: '<script>invalid</script>',
                     content: 'Content'
                 });
             expect(res.status).toBe(400);
@@ -105,7 +107,7 @@ describe('API Contract - Response Format', () => {
             expect(res.body.error).toBe('NOTE_NOT_FOUND');
             expect(res.body.statusCode).toBe(404);
         });
-        test('ID inválido devuelve 400', async () => {
+        test('ID invï¿½lido devuelve 400', async () => {
             const res = await sendWithSession(request(app)
                 .patch('/api/notes/invalid-id'))
                 .send({ title: 'Updated' });
@@ -121,11 +123,11 @@ describe('API Contract - Response Format', () => {
                 });
             const noteId = createRes.body.data._id;
             const res = await sendWithSession(request(app)
-                .post(`/api/notes/${noteId}/undo`));
+                .patch(`/api/notes/${noteId}/undo`));
             expect(res.status).toBe(400);
             expect(res.body.error).toBe('NO_HISTORY');
         });
-        test('Restaurar nota que no está en papelera devuelve 404', async () => {
+        test('Restaurar nota que no estï¿½ en papelera devuelve 404', async () => {
             const createRes = await sendWithSession(request(app)
                 .post('/api/notes'))
                 .send({
@@ -173,7 +175,7 @@ describe('API Contract - Response Format', () => {
         });
     });
     describe('Undo/Redo Workflow', () => {
-        test('Undo después de múltiples cambios restaura versión anterior', async () => {
+        test('Undo despuï¿½s de mï¿½ltiples cambios restaura versiï¿½n anterior', async () => {
             const createRes = await sendWithSession(request(app)
                 .post('/api/notes'))
                 .send({
@@ -188,10 +190,10 @@ describe('API Contract - Response Format', () => {
                 .patch(`/api/notes/${noteId}`))
                 .send({ title: 'Change 2' });
             const undoRes = await sendWithSession(request(app)
-                .post(`/api/notes/${noteId}/undo`));
+                .patch(`/api/notes/${noteId}/undo`));
             expect(undoRes.body.data.title).toBe('Change 1');
             const redoRes = await sendWithSession(request(app)
-                .post(`/api/notes/${noteId}/redo`));
+                .patch(`/api/notes/${noteId}/redo`));
             expect(redoRes.body.data.title).toBe('Change 2');
         });
     });

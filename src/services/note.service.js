@@ -1,5 +1,6 @@
 // src/services/note.service.js
 
+const xss = require('xss');
 const noteRepository = require('../repositories/note.repository');
 const NoteHistory = require('../domain/noteHistory');
 
@@ -7,27 +8,56 @@ class NoteService {
     /**
      * Crear nueva nota
      * NOTA: La validación ya se hizo en el controller con DTO
+     * SECURITY: Se sanitiza el contenido para prevenir XSS
      */
     async createNote(data, sessionId) {
-        return await noteRepository.create(data, sessionId);
+        // SECURITY: Sanitizar contenido antes de guardar
+        const sanitizedData = {
+            ...data,
+            content: data.content ? xss(data.content, { whiteList: {}, stripIgnoredTag: true }) : ''
+        };
+        return await noteRepository.create(sanitizedData, sessionId);
     }
 
     /**
-     * Listar notas activas de la sesión
+     * Listar notas activas de la sesión con paginación
+     * @param {string} sessionId - ID de la sesión
+     * @param {number} skip - Número de registros a saltar
+     * @param {number} limit - Número máximo de registros a retornar
      */
-    async listActiveNotes(sessionId) {
-        return await noteRepository.findAllActive(sessionId);
+    async listActiveNotes(sessionId, skip = 0, limit = 20) {
+        return await noteRepository.findAllActive(sessionId, skip, limit);
     }
 
     /**
-     * Listar papelera de la sesión
+     * Contar notas activas de la sesión
+     * @param {string} sessionId - ID de la sesión
      */
-    async listTrash(sessionId) {
-        return await noteRepository.findAllDeleted(sessionId);
+    async countActiveNotes(sessionId) {
+        return await noteRepository.countActive(sessionId);
+    }
+
+    /**
+     * Listar papelera de la sesión con paginación
+     * @param {string} sessionId - ID de la sesión
+     * @param {number} skip - Número de registros a saltar
+     * @param {number} limit - Número máximo de registros a retornar
+     */
+    async listTrash(sessionId, skip = 0, limit = 20) {
+        return await noteRepository.findAllDeleted(sessionId, skip, limit);
+    }
+
+    /**
+     * Contar notas eliminadas de la sesión
+     * @param {string} sessionId - ID de la sesión
+     */
+    async countTrash(sessionId) {
+        return await noteRepository.countDeleted(sessionId);
     }
 
     /**
      * Actualizar nota
+     * SECURITY: Se sanitiza el contenido para prevenir XSS
      */
     async updateNote(id, updates, sessionId) {
         console.debug(`[NoteService.updateNote] Looking for note`, {
@@ -50,8 +80,14 @@ class NoteService {
             title: note.title?.substring(0, 20)
         });
 
+        // SECURITY: Sanitizar contenido antes de guardar
+        const sanitizedUpdates = { ...updates };
+        if (sanitizedUpdates.content !== undefined) {
+            sanitizedUpdates.content = xss(sanitizedUpdates.content, { whiteList: {}, stripIgnoredTag: true });
+        }
+
         // Verificar si hay cambios reales usando la lógica del dominio
-        const hasChanges = NoteHistory.hasRealChanges(note, updates);
+        const hasChanges = NoteHistory.hasRealChanges(note, sanitizedUpdates);
 
         // Si no hay cambios reales, retornar la nota sin crear versión ni guardar
         if (!hasChanges) {
@@ -59,8 +95,8 @@ class NoteService {
         }
 
         // Si se envió lastKnownUpdate, validar concurrencia
-        if (updates.lastKnownUpdate) {
-            const lastKnown = new Date(updates.lastKnownUpdate).toISOString();
+        if (sanitizedUpdates.lastKnownUpdate) {
+            const lastKnown = new Date(sanitizedUpdates.lastKnownUpdate).toISOString();
             const current = note.updatedAt ? new Date(note.updatedAt).toISOString() : null;
             if (lastKnown !== current) {
                 const error = new Error('CONFLICT: Note was modified by another session');
@@ -73,8 +109,8 @@ class NoteService {
         NoteHistory.saveVersion(note);
 
         // Aplicar cambios
-        if (updates.title !== undefined) note.title = updates.title;
-        if (updates.content !== undefined) note.content = updates.content;
+        if (sanitizedUpdates.title !== undefined) note.title = sanitizedUpdates.title;
+        if (sanitizedUpdates.content !== undefined) note.content = sanitizedUpdates.content;
 
 
         // Limpiar redo al editar

@@ -2,6 +2,7 @@
 
 const noteService = require('../services/note.service');
 const NoteDTO = require('../dto/note.dto');
+const crypto = require('crypto');
 
 class NoteController {
     /**
@@ -44,15 +45,32 @@ class NoteController {
 
     /**
      * GET /api/notes
+     * Soporta paginación con query params: ?page=1&limit=20
      */
     async listActive(req, res) {
         try {
-            const notes = await noteService.listActiveNotes(
-                req.sessionId
-            );
+            // Obtener parámetros de paginación (valores por defecto: page=1, limit=20)
+            const page = Math.max(1, parseInt(req.query.page) || 1);
+            const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20)); // Max 100 por seguridad
+            const skip = (page - 1) * limit;
+
+            // Ejecutar ambas queries en paralelo para eficiencia
+            const [notes, total] = await Promise.all([
+                noteService.listActiveNotes(req.sessionId, skip, limit),
+                noteService.countActiveNotes(req.sessionId)
+            ]);
+
+            const pages = Math.ceil(total / limit);
+
             res.json({
                 success: true,
                 data: notes,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages
+                },
                 statusCode: 200
             });
         } catch (error) {
@@ -67,15 +85,32 @@ class NoteController {
 
     /**
      * GET /api/notes/trash
+     * Soporta paginación con query params: ?page=1&limit=20
      */
     async listTrash(req, res) {
         try {
-            const notes = await noteService.listTrash(
-                req.sessionId
-            );
+            // Obtener parámetros de paginación (valores por defecto: page=1, limit=20)
+            const page = Math.max(1, parseInt(req.query.page) || 1);
+            const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20)); // Max 100 por seguridad
+            const skip = (page - 1) * limit;
+
+            // Ejecutar ambas queries en paralelo para eficiencia
+            const [notes, total] = await Promise.all([
+                noteService.listTrash(req.sessionId, skip, limit),
+                noteService.countTrash(req.sessionId)
+            ]);
+
+            const pages = Math.ceil(total / limit);
+
             res.json({
                 success: true,
                 data: notes,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages
+                },
                 statusCode: 200
             });
         } catch (error) {
@@ -90,13 +125,17 @@ class NoteController {
 
     /**
      * PATCH /api/notes/:id
+     * SECURITY: Regenerar sesión después de actualizar nota
      */
     async update(req, res) {
         try {
             const { id } = req.params;
+            const sessionHash = req.sessionId
+                ? crypto.createHash('sha256').update(req.sessionId).digest('hex').substring(0, 8)
+                : 'anon';
             console.debug(`[NoteController.update] Received update request`, {
                 id,
-                sessionId: req.sessionId?.substring(0, 8) + '...',
+                sessionHash,
                 bodyKeys: Object.keys(req.body)
             });
 
@@ -300,10 +339,12 @@ class NoteController {
     async deletePermanently(req, res) {
         try {
             const { id } = req.params;
+            
             await noteService.deletePermanently(
                 id,
                 req.sessionId
             );
+
             // 200 OK con confirmación
             res.status(200).json({
                 success: true,
