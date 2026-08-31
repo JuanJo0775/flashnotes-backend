@@ -2,7 +2,17 @@
 
 const noteService = require('../services/note.service');
 const NoteDTO = require('../dto/note.dto');
-const crypto = require('crypto');
+
+/** Respuesta de error uniforme. */
+const fail = (res, status, error, message) =>
+    res.status(status).json({ success: false, error, message, statusCode: status });
+
+/** Lee ?page y ?limit acotando a valores seguros. */
+const readPagination = (query) => {
+    const page = Math.max(1, parseInt(query.page, 10) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(query.limit, 10) || 50));
+    return { page, limit, skip: (page - 1) * limit };
+};
 
 class NoteController {
     /**
@@ -34,12 +44,7 @@ class NoteController {
                 statusCode: 201
             });
         } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -49,10 +54,7 @@ class NoteController {
      */
     async listActive(req, res) {
         try {
-            // Obtener parámetros de paginación (valores por defecto: page=1, limit=20)
-            const page = Math.max(1, parseInt(req.query.page) || 1);
-            const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20)); // Max 100 por seguridad
-            const skip = (page - 1) * limit;
+            const { page, limit, skip } = readPagination(req.query);
 
             // Ejecutar ambas queries en paralelo para eficiencia
             const [notes, total] = await Promise.all([
@@ -74,12 +76,7 @@ class NoteController {
                 statusCode: 200
             });
         } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -89,10 +86,7 @@ class NoteController {
      */
     async listTrash(req, res) {
         try {
-            // Obtener parámetros de paginación (valores por defecto: page=1, limit=20)
-            const page = Math.max(1, parseInt(req.query.page) || 1);
-            const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20)); // Max 100 por seguridad
-            const skip = (page - 1) * limit;
+            const { page, limit, skip } = readPagination(req.query);
 
             // Ejecutar ambas queries en paralelo para eficiencia
             const [notes, total] = await Promise.all([
@@ -114,12 +108,7 @@ class NoteController {
                 statusCode: 200
             });
         } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -130,14 +119,6 @@ class NoteController {
     async update(req, res) {
         try {
             const { id } = req.params;
-            const sessionHash = req.sessionId
-                ? crypto.createHash('sha256').update(req.sessionId).digest('hex').substring(0, 8)
-                : 'anon';
-            console.debug(`[NoteController.update] Received update request`, {
-                id,
-                sessionHash,
-                bodyKeys: Object.keys(req.body)
-            });
 
             const sanitized = NoteDTO.sanitizeUpdate(req.body);
             const validation = NoteDTO.validateUpdate(sanitized);
@@ -165,27 +146,12 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_FOUND',
-                    message: 'La nota solicitada no existe o fue eliminada',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_FOUND', 'La nota solicitada no existe o fue eliminada');
             }
             if (error.code === 'CONFLICT') {
-                return res.status(409).json({
-                    success: false,
-                    error: 'CONFLICT',
-                    message: 'La nota fue modificada por otra sesión. Recarga la página.',
-                    statusCode: 409
-                });
+                return fail(res, 409, 'CONFLICT', 'La nota fue modificada por otra sesión. Recarga la página.');
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -206,27 +172,12 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_FOUND',
-                    message: 'La nota solicitada no existe o fue eliminada',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_FOUND', 'La nota solicitada no existe o fue eliminada');
             }
             if (error.code === 'NO_HISTORY') {
-                return res.status(400).json({
-                    success: false,
-                    error: 'NO_HISTORY',
-                    message: error.message,
-                    statusCode: 400
-                });
+                return fail(res, 400, 'NO_HISTORY', error.message);
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -247,37 +198,18 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_FOUND',
-                    message: 'La nota solicitada no existe o fue eliminada',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_FOUND', 'La nota solicitada no existe o fue eliminada');
             }
             if (error.code === 'NO_HISTORY') {
-                return res.status(400).json({
-                    success: false,
-                    error: 'NO_REDO',
-                    message: error.message,
-                    statusCode: 400
-                });
+                return fail(res, 400, 'NO_REDO', error.message);
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
     async moveToTrash(req, res) {
         try {
             const { id } = req.params;
-            console.debug(`[NoteController.moveToTrash] Received trash request`, {
-                id,
-                sessionId: req.sessionId?.substring(0, 8) + '...'
-            });
 
             const note = await noteService.moveToTrash(
                 id,
@@ -290,19 +222,9 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_FOUND',
-                    message: 'La nota solicitada no existe o fue eliminada',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_FOUND', 'La nota solicitada no existe o fue eliminada');
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -320,19 +242,9 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_IN_TRASH',
-                    message: 'La nota no está en la papelera',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_IN_TRASH', 'La nota no está en la papelera');
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -353,19 +265,9 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_IN_TRASH') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_IN_TRASH',
-                    message: 'La nota no está en la papelera',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_IN_TRASH', 'La nota no está en la papelera');
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 
@@ -383,19 +285,9 @@ class NoteController {
             });
         } catch (error) {
             if (error.message === 'NOTE_NOT_FOUND') {
-                return res.status(404).json({
-                    success: false,
-                    error: 'NOTE_NOT_FOUND',
-                    message: 'La nota solicitada no existe o fue eliminada',
-                    statusCode: 404
-                });
+                return fail(res, 404, 'NOTE_NOT_FOUND', 'La nota solicitada no existe o fue eliminada');
             }
-            res.status(500).json({
-                success: false,
-                error: 'INTERNAL_SERVER_ERROR',
-                message: 'Error interno del servidor',
-                statusCode: 500
-            });
+            return fail(res, 500, 'INTERNAL_SERVER_ERROR', 'Error interno del servidor');
         }
     }
 }

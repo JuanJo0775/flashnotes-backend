@@ -8,142 +8,165 @@ const sessionMiddleware = require('./middleware/session');
 const requestLogger = require('./middleware/requestLogger');
 const errorHandler = require('./middleware/errorHandler');
 const notesRoutes = require('./routes/notes.routes');
+const { LIMITS } = require('./config/limits');
 
 const app = express();
 
-// SECURITY: Helmet para prevenir inyecciones y configurar headers de seguridad
+// El health check y el token CSRF son sondas del propio cliente y no deben
+// contar contra el límite (ver más abajo).
+const UNMETERED_PATHS = ['/api/health', '/api/csrf-token'];
+
+/* ============================================================
+   SEGURIDAD: cabeceras
+============================================================ */
 app.use(helmet());
 app.use(helmet.contentSecurityPolicy({
     directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
         connectSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
-        frameSrc: ["'none'"]
+        frameSrc: ["'none'"],
+        frameAncestors: ["'none'"]
     }
 }));
 
-// SECURITY: Rate limiting global para prevenir DoS y brute force
+/* ============================================================
+   SEGURIDAD: rate limiting
+
+   El límite anterior (100 req / 15 min) lo agotaba la propia app: entre el
+   health check cada 30 s y el heartbeat del token CSRF, el cliente gastaba
+   ~90 peticiones en reposo y se autobloqueaba con 429 antes de que el usuario
+   escribiera nada. Dos cambios:
+
+   1. Las sondas del cliente (/health, /csrf-token) no se contabilizan.
+   2. El presupuesto sube a 300, que es lo que consume una sesión de escritura
+      real con auto-guardado.
+============================================================ */
 const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 100, // 100 requests por IP
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    skip: (req) =>
+        UNMETERED_PATHS.includes(req.path) ||
+        // El contador vive en memoria y lo comparte todo el proceso, así que
+        // con --runInBand la suite entera gasta un único presupuesto y las
+        // últimas suites en ejecutarse recibían 429 según el orden. El límite
+        // por ruta destructiva sigue activo y es el que verifica
+        // security.integration.test.js.
+        process.env.NODE_ENV === 'test',
     message: {
         success: false,
         error: 'TOO_MANY_REQUESTS',
         message: 'Demasiadas solicitudes desde esta IP. Intente más tarde.',
         statusCode: 429
     },
-    standardHeaders: true, // Retornar límites de rata en headers RateLimit-*
-    legacyHeaders: false // Deshabilitar headers X-RateLimit-*
-});
-
-// SECURITY: Rate limiting estricto para operaciones sensibles
-const strictLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 5, // 5 requests por IP en operaciones sensibles
-    message: {
-        success: false,
-        error: 'TOO_MANY_REQUESTS',
-        message: 'Demasiadas solicitudes. Intente más tarde.',
-        statusCode: 429
-    },
     standardHeaders: true,
     legacyHeaders: false
 });
 
-// Aplicar rate limiting global a toda la API
 app.use('/api/', globalLimiter);
 
-// CORS: permitir múltiples orígenes en desarrollo
-const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173'
-];
+/* ============================================================
+   CORS
+
+   La lista blanca se lee de CORS_ORIGINS (separada por comas) y se aplica de
+   verdad: la versión anterior registraba el origen desconocido en consola y lo
+   dejaba pasar igual, lo que con `credentials: true` permitía a cualquier web
+   leer las notas usando la cookie de sesión del navegador.
+============================================================ */
+const allowedOrigins = (
+    process.env.CORS_ORIGINS ||
+    'http://localhost:3000,http://127.0.0.1:3000'
+)
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Si no hay origin (ej: requests desde mismo servidor), permitir
+        // Sin origin: peticiones del mismo servidor, curl o herramientas de test.
         if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            // En producción, cambiar a: callback(new Error('CORS not allowed'))
-            console.warn(`CORS: Origen no permitido: ${origin}`);
-            callback(null, true); // Permitir por ahora para desarrollo
+            return callback(null, true);
         }
+        console.warn(`[CORS] Origen rechazado: ${origin}`);
+        return callback(new Error('CORS_NOT_ALLOWED'));
     },
-    credentials: true, // CRITICAL: permite envío de cookies
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-CSRF-Token']
 }));
 
-// SECURITY: Validar strict JSON content-type y limitar tamaño de payload
-app.use(express.json({ 
+/* ============================================================
+   Parseo de cuerpo
+============================================================ */
+app.use(express.json({
     type: ['application/json'],
     strict: true,
-    limit: '10kb' // Limitar a 10kb para prevenir ataques de payload gigante
+    limit: LIMITS.BODY_LIMIT
 }));
 
-app.use(express.urlencoded({
-    extended: true,
-    limit: '10kb' // Limitar a 10kb
-}));
+app.use(express.urlencoded({ extended: true, limit: LIMITS.BODY_LIMIT }));
 
-// SECURITY: Rechazar requests con Content-Type inválido para métodos de escritura con payload
+// Rechazar cuerpos que no sean JSON en métodos de escritura.
+// Se comprueba sólo si hay cuerpo: undo, redo, trash y restore son PATCH sin
+// payload y no llevan (ni necesitan) cabecera Content-Type.
 app.use((req, res, next) => {
-    if (['POST', 'PATCH', 'PUT'].includes(req.method)) {
-        const ct = req.get('content-type');
-        // Si hay Content-Type pero NO es application/json, rechazar
-        if (ct && !ct.includes('application/json')) {
-            return res.status(415).json({
-                success: false,
-                error: 'UNSUPPORTED_MEDIA_TYPE',
-                message: 'Content-Type debe ser application/json',
-                statusCode: 415
-            });
-        }
+    if (!['POST', 'PATCH', 'PUT'].includes(req.method)) return next();
+
+    const hasBody = Number(req.get('content-length') || 0) > 0;
+    if (!hasBody) return next();
+
+    const contentType = req.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+        return res.status(415).json({
+            success: false,
+            error: 'UNSUPPORTED_MEDIA_TYPE',
+            message: 'Content-Type debe ser application/json',
+            statusCode: 415
+        });
     }
+
     next();
 });
 
 // Cookie parser: DEBE ir ANTES del middleware de sesión
 app.use(cookieParser());
-
-// Aplicar middleware de sesión a todas las rutas
 app.use(sessionMiddleware);
 
-// SECURITY: Protección CSRF (cookie-based para simplicidad)
-// CRÍTICO: Habilitado en todos los entornos excepto test
-if (process.env.NODE_ENV !== 'test') {
-    const csrfProtection = csrf({ cookie: true });
-    app.use(csrfProtection);
-    console.log('[SECURITY] CSRF protection enabled (cookie-based)');
+/* ============================================================
+   SEGURIDAD: CSRF
+
+   Se controla con DISABLE_CSRF, no con NODE_ENV. Antes se apagaba en el entorno
+   de test — justo donde se verifica — así que la suite en verde no decía nada
+   sobre si la protección funciona. Ahora los tests la apagan explícitamente y
+   csrf.integration.test.js la enciende para comprobarla de verdad.
+============================================================ */
+const csrfEnabled = process.env.DISABLE_CSRF !== 'true';
+
+if (csrfEnabled) {
+    app.use(csrf({ cookie: true }));
 }
 
-// Logger de requests (desarrollo)
 if (process.env.NODE_ENV !== 'test') {
     app.use(requestLogger);
 }
 
-// SECURITY: Ruta para obtener token CSRF
+/* ============================================================
+   Rutas
+============================================================ */
 app.get('/api/csrf-token', (req, res) => {
     res.json({
         success: true,
         data: {
-            csrfToken: req.csrfToken()
+            csrfToken: csrfEnabled ? req.csrfToken() : null
         },
         statusCode: 200
     });
 });
 
-// Rutas
-app.use('/api/notes', notesRoutes);
-
-// Health check
 app.get('/api/health', (req, res) => {
     res.json({
         success: true,
@@ -152,6 +175,18 @@ app.get('/api/health', (req, res) => {
             timestamp: new Date().toISOString()
         },
         statusCode: 200
+    });
+});
+
+app.use('/api/notes', notesRoutes);
+
+// 404 en JSON, para que el cliente nunca reciba el HTML por defecto de Express
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        error: 'NOT_FOUND',
+        message: `La ruta ${req.method} ${req.path} no existe`,
+        statusCode: 404
     });
 });
 

@@ -1,103 +1,70 @@
-# Flashnotes - Backend
+# FlashNotes · Backend
 
-API backend ligera para una aplicación de notas con soporte de historial (undo/redo), papelera y concurrencia optimista.
+API REST de notas efímeras. Express 4 + MongoDB (Mongoose).
+Sin cuentas: una cookie `sessionId` identifica el navegador y cada sesión ve
+sólo sus notas.
 
-Características principales:
-- CRUD de notas con validaciones (título, contenido).
-- Historial de versiones (snapshots) con límite configurable (20) para undo/redo.
-- Redo stack y invalidación al editar después de un undo.
-- Soft delete (papelera) y eliminación permanente.
-- Control de concurrencia mediante `editedAt` (optimistic concurrency).
-- Tests automatizados (unit + integration) con MongoDB en memoria.
-
----
-
-## Requisitos
-
-- Node.js 18+ (recomendado)
-- npm (v9+)
-- MongoDB no es necesario para tests; en desarrollo/producción necesitas una instancia MongoDB accesible.
-
----
-
-## Variables de entorno
-
-Crea un archivo `.env` en la raíz con al menos:
-
-```
-MONGO_URI=mongodb://user:pass@host:port/dbname
-PORT=3000
-```
-
----
-
-## Instalación
+## Arrancar
 
 ```bash
 npm install
+cp .env.example .env     # ajustá MONGO_URI y CORS_ORIGINS si hace falta
+npm run dev              # http://localhost:5000
 ```
 
----
+Necesita un MongoDB escuchando en `localhost:27017`.
 
-## Comandos útiles
-
-- Iniciar servidor:
+## Tests
 
 ```bash
-npm start
+npm test                 # 148 tests: unidad + integración
+npm run test:unit
+npm run test:integration
+npm run test:csrf        # verifica la protección CSRF con CSRF activo
+npm run test:coverage
 ```
 
-- Tests:
+Los tests de integración levantan un MongoDB en memoria; no tocan tu base local.
 
-```bash
-npm test            # Ejecuta todos los tests (jest --runInBand)
-npm run test:unit  # Solo tests unitarios
-npm run test:integration # Solo tests de integración
-npm run test:coverage # Coverage
-npm run test:watch  # Watch mode
+## Estructura
+
+```
+src/
+├── app.js            Middleware: helmet, CORS, rate limiting, CSRF, parseo
+├── config/
+│   ├── db.js         Conexión a MongoDB
+│   └── limits.js     Límites de validación (espejo de los del frontend)
+├── routes/           Rutas HTTP
+├── controllers/      HTTP ↔ dominio. Sin reglas de negocio
+├── services/         Reglas de negocio
+├── repositories/     Acceso a datos
+├── domain/           Undo/redo puro, sin dependencias externas
+├── dto/              Validación y saneamiento de entrada
+├── models/           Esquemas de Mongoose
+└── middleware/       Sesión, logging, errores, validación de :id
 ```
 
----
+## Documentación
 
-## Rutas principales
+- [docs/API.md](docs/API.md) — contrato HTTP completo
+- [docs/SEGURIDAD.md](docs/SEGURIDAD.md) — qué defiende cada capa, y qué no
+- `api-collection/` — colección de [Bruno](https://www.usebruno.com/) para
+  probar la API a mano. Ejecutá *Health check* primero, para que se emita la cookie.
 
-Basadas en `src/routes/notes.routes.js`:
+## Variables de entorno
 
-- POST /api/notes — crear nota
-- GET /api/notes — listar notas activas
-- GET /api/notes/trash — listar notas en papelera
-- PATCH /api/notes/:id — actualizar nota (parcial)
-- POST /api/notes/:id/undo — deshacer último cambio
-- POST /api/notes/:id/redo — rehacer último cambio
-- PATCH /api/notes/:id/trash — mover a papelera
-- PATCH /api/notes/:id/restore — restaurar de papelera
-- DELETE /api/notes/:id/permanent — eliminar permanentemente
-- GET /api/health — health check
+| Variable        | Por defecto                                        | Para qué                                   |
+| --------------- | -------------------------------------------------- | ------------------------------------------ |
+| `PORT`          | `5000`                                             | Puerto                                     |
+| `MONGO_URI`     | —                                                  | Cadena de conexión                         |
+| `NODE_ENV`      | `development`                                      | En `production` activa cookies `secure`    |
+| `CORS_ORIGINS`  | `http://localhost:3000,http://127.0.0.1:3000`      | Lista blanca, separada por comas           |
+| `DISABLE_CSRF`  | `false`                                            | `true` **sólo** en tests                   |
 
----
+## Una regla que no se toca
 
-## Estructura del proyecto
-
-- src/ — código fuente
-- tests/ — pruebas unitarias e integración
-- bin/www — punto de entrada del servidor
-
----
-
-## Notas para desarrolladores
-
-- Los tests de integración usan `mongodb-memory-server` y `tests/setup.js` crea `global.mockSessionId` para simular la sesión.
-- Para trabajo en CI, ejecutar `npm test` y publicar coverage si lo deseas.
-
----
-
-## Contribuir
-
-Abre un PR con cambios pequeños y tests que cubran la nueva funcionalidad.
-
----
-
-Si quieres, puedo añadir:
-- Plantilla básica de GitHub Actions para ejecutar tests.
-- Badges de estado/coverage en este README.
-- Documentación OpenAPI / Postman collection.
+**El contenido de una nota se guarda literal.** Sin `trim`, sin escapado, sin
+filtros. Había tres capas recortándolo y escapándolo a la vez y entre las tres
+se comían el salto de línea final y borraban cualquier `<div>` que escribieras.
+La defensa contra XSS es no renderizarlo nunca como HTML.
+Está fijado en `tests/integration/content-fidelity.test.js`.

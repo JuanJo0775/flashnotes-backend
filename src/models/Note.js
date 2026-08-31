@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
+const { LIMITS } = require('../config/limits');
 
-const MAX_HISTORY = 20;
+const MAX_HISTORY = LIMITS.HISTORY_MAX;
 
 /* ============================================================
    SNAPSHOT (INMUTABLE Y VALIDADO)
@@ -13,9 +14,9 @@ const snapshotSchema = new mongoose.Schema(
             maxlength: 100,
         },
 
+        // Sin trim: un snapshot tiene que poder restaurar el texto exacto.
         content: {
             type: String,
-            trim: true,
         },
 
         editedAt: {
@@ -53,11 +54,17 @@ const noteSchema = new mongoose.Schema(
             index: true,
         },
 
+        /*
+         * Sin `trim`. Era el tercer recorte del contenido en el camino (los
+         * otros dos estaban en el DTO y en el editor), y el que sobrevivía:
+         * borraba el salto de línea o el espacio final en CADA guardado, así
+         * que pulsar Enter al final de una nota no tenía efecto.
+         * El título sí se recorta: es una etiqueta de una línea.
+         */
         content: {
             type: String,
             required: false,
-            trim: true,
-            default: '' // Permitir contenido vacío al crear notas
+            default: ''
         },
 
         /* ========== TIMESTAMP DE EDICIÓN (PARA CONCURRENCIA) ========== */

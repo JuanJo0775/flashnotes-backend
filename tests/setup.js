@@ -5,6 +5,10 @@ const mongoose = require('mongoose');
 
 let mongoServer;
 
+// CSRF se apaga por variable explicita, no por NODE_ENV, para que
+// csrf.integration.test.js pueda encenderlo y verificarlo de verdad.
+process.env.DISABLE_CSRF = process.env.DISABLE_CSRF || 'true';
+
 // Mock sessionId para tests
 global.mockSessionId = 'test-session-123';
 

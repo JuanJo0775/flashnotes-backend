@@ -1,29 +1,28 @@
 // src/services/note.service.js
 
-const xss = require('xss');
 const noteRepository = require('../repositories/note.repository');
 const NoteHistory = require('../domain/noteHistory');
 
+/**
+ * Reglas de negocio de las notas.
+ *
+ * Sobre sanitización: el contenido se guarda literal, sin pasar por xss() ni
+ * DOMPurify. Esas librerías escapan HTML para insertarlo en el DOM; acá el texto
+ * nunca se inserta como HTML (el cliente lo pinta en un <textarea> y en nodos de
+ * texto), así que lo único que hacían era corromper notas — `a < b` quedaba
+ * guardado como `a &lt; b` y `<div>` desaparecía del texto del usuario.
+ * La validación de entrada vive en NoteDTO.
+ */
 class NoteService {
     /**
      * Crear nueva nota
-     * NOTA: La validación ya se hizo en el controller con DTO
-     * SECURITY: Se sanitiza el contenido para prevenir XSS
      */
     async createNote(data, sessionId) {
-        // SECURITY: Sanitizar contenido antes de guardar
-        const sanitizedData = {
-            ...data,
-            content: data.content ? xss(data.content, { whiteList: {}, stripIgnoredTag: true }) : ''
-        };
-        return await noteRepository.create(sanitizedData, sessionId);
+        return await noteRepository.create(data, sessionId);
     }
 
     /**
      * Listar notas activas de la sesión con paginación
-     * @param {string} sessionId - ID de la sesión
-     * @param {number} skip - Número de registros a saltar
-     * @param {number} limit - Número máximo de registros a retornar
      */
     async listActiveNotes(sessionId, skip = 0, limit = 20) {
         return await noteRepository.findAllActive(sessionId, skip, limit);
@@ -31,7 +30,6 @@ class NoteService {
 
     /**
      * Contar notas activas de la sesión
-     * @param {string} sessionId - ID de la sesión
      */
     async countActiveNotes(sessionId) {
         return await noteRepository.countActive(sessionId);
@@ -39,9 +37,6 @@ class NoteService {
 
     /**
      * Listar papelera de la sesión con paginación
-     * @param {string} sessionId - ID de la sesión
-     * @param {number} skip - Número de registros a saltar
-     * @param {number} limit - Número máximo de registros a retornar
      */
     async listTrash(sessionId, skip = 0, limit = 20) {
         return await noteRepository.findAllDeleted(sessionId, skip, limit);
@@ -49,54 +44,34 @@ class NoteService {
 
     /**
      * Contar notas eliminadas de la sesión
-     * @param {string} sessionId - ID de la sesión
      */
     async countTrash(sessionId) {
         return await noteRepository.countDeleted(sessionId);
     }
 
     /**
-     * Actualizar nota
-     * SECURITY: Se sanitiza el contenido para prevenir XSS
+     * Actualizar nota.
+     *
+     * Cada actualización con cambios reales crea un punto de historial: el contrato
+     * de la API es "un PATCH = un paso de undo", y agruparlo acá rompía el undo de
+     * ediciones deliberadas y consecutivas. El problema de que el historial se
+     * llenara de estados separados por un segundo se resuelve donde nace — en la
+     * cadencia del auto-guardado del editor, no en el servidor.
      */
     async updateNote(id, updates, sessionId) {
-        console.debug(`[NoteService.updateNote] Looking for note`, {
-            id,
-            sessionId: sessionId?.substring(0, 8) + '...'
-        });
-
         const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
-            console.warn(`[NoteService.updateNote] Note NOT FOUND`, {
-                id,
-                sessionId: sessionId?.substring(0, 8) + '...'
-            });
             throw new Error('NOTE_NOT_FOUND');
         }
 
-        console.debug(`[NoteService.updateNote] Note found`, {
-            id: note._id,
-            title: note.title?.substring(0, 20)
-        });
-
-        // SECURITY: Sanitizar contenido antes de guardar
-        const sanitizedUpdates = { ...updates };
-        if (sanitizedUpdates.content !== undefined) {
-            sanitizedUpdates.content = xss(sanitizedUpdates.content, { whiteList: {}, stripIgnoredTag: true });
-        }
-
-        // Verificar si hay cambios reales usando la lógica del dominio
-        const hasChanges = NoteHistory.hasRealChanges(note, sanitizedUpdates);
-
-        // Si no hay cambios reales, retornar la nota sin crear versión ni guardar
-        if (!hasChanges) {
+        if (!NoteHistory.hasRealChanges(note, updates)) {
             return note;
         }
 
-        // Si se envió lastKnownUpdate, validar concurrencia
-        if (sanitizedUpdates.lastKnownUpdate) {
-            const lastKnown = new Date(sanitizedUpdates.lastKnownUpdate).toISOString();
+        // Control de concurrencia optimista, si el cliente lo pidió
+        if (updates.lastKnownUpdate) {
+            const lastKnown = new Date(updates.lastKnownUpdate).toISOString();
             const current = note.updatedAt ? new Date(note.updatedAt).toISOString() : null;
             if (lastKnown !== current) {
                 const error = new Error('CONFLICT: Note was modified by another session');
@@ -105,15 +80,12 @@ class NoteService {
             }
         }
 
-        // Guardar versión actual antes de editar
         NoteHistory.saveVersion(note);
 
-        // Aplicar cambios
-        if (sanitizedUpdates.title !== undefined) note.title = sanitizedUpdates.title;
-        if (sanitizedUpdates.content !== undefined) note.content = sanitizedUpdates.content;
+        if (updates.title !== undefined) note.title = updates.title;
+        if (updates.content !== undefined) note.content = updates.content;
 
-
-        // Limpiar redo al editar
+        note.editedAt = new Date();
         note.redoStack = [];
 
         return await noteRepository.save(note);
@@ -129,7 +101,6 @@ class NoteService {
             throw new Error('NOTE_NOT_FOUND');
         }
 
-        // Usar la versión mutable del dominio que lanza errores legibles
         NoteHistory.undoMutable(note);
         return await noteRepository.save(note);
     }
@@ -152,18 +123,9 @@ class NoteService {
      * Mover a papelera (soft delete)
      */
     async moveToTrash(id, sessionId) {
-        console.debug(`[NoteService.moveToTrash] Looking for active note`, {
-            id,
-            sessionId: sessionId?.substring(0, 8) + '...'
-        });
-
         const note = await noteRepository.findActiveById(id, sessionId);
 
         if (!note) {
-            console.warn(`[NoteService.moveToTrash] Note NOT FOUND`, {
-                id,
-                sessionId: sessionId?.substring(0, 8) + '...'
-            });
             throw new Error('NOTE_NOT_FOUND');
         }
 
