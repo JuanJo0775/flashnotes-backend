@@ -9,7 +9,6 @@ require('dotenv').config();
  * Module dependencies.
  */
 var app = require('../src/app');
-var debug = require('debug')('flashnotes-backend:server');
 var http = require('http');
 var connectDB = require('../src/config/db');
 
@@ -89,6 +88,5 @@ function onListening() {
   var bind = typeof addr === 'string'
       ? 'pipe ' + addr
       : 'port ' + addr.port;
-  debug('Listening on ' + bind);
   console.log(`🚀 FlashNotes Backend running on ${bind}`);
 }

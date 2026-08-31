@@ -4,7 +4,9 @@
  * Dominio puro: lógica de undo/redo sin dependencias externas
  */
 
-const MAX_HISTORY = 20;
+const { LIMITS } = require('../config/limits');
+
+const MAX_HISTORY = LIMITS.HISTORY_MAX;
 
 class NoteHistoryDomain {
     /**

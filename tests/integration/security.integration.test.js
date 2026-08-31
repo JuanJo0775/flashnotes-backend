@@ -118,7 +118,10 @@ describe('Security & Validation - Integration Tests', () => {
         });
 
         test('debe rechazar payloads demasiado grandes con 413', async () => {
-            const bigContent = 'a'.repeat(11000);
+            // Por encima del techo de cuerpo (16kb). Un contenido de 11000
+            // caracteres ya no vale como payload gigante: excede CONTENT_MAX y
+            // el servidor debe responder 400 de validación, no 413.
+            const bigContent = 'a'.repeat(30000);
             const res = await sendWithSession(request(app)
                 .post('/api/notes')
                 .send({
